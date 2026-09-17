@@ -3,18 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
+    "dev": "node scripts/with-db-url.cjs next dev",
+    "build": "node scripts/with-db-url.cjs prisma generate && next build",
+    "start": "node scripts/with-db-url.cjs next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:setup": "prisma migrate dev --name init && tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "db:generate": "node scripts/with-db-url.cjs prisma generate",
+    "db:migrate": "node scripts/with-db-url.cjs prisma migrate dev",
+    "db:push": "node scripts/with-db-url.cjs prisma db push",
+    "db:seed": "node scripts/with-db-url.cjs tsx prisma/seed.ts",
+    "db:setup": "node scripts/with-db-url.cjs prisma migrate dev --name init && node scripts/with-db-url.cjs tsx prisma/seed.ts",
+    "postinstall": "node scripts/with-db-url.cjs prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

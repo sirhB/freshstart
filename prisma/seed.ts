@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDbUrl } from "../src/lib/resolve-db-url";
 import { classifyTradelines } from "../src/lib/dispute/classify";
 import { buildDisputePacket } from "../src/lib/dispute/letters";
 import {
@@ -8,7 +9,10 @@ import {
 } from "../src/lib/dispute/sample-data";
 import { FURNISHER_DIRECTORY } from "../src/lib/dispute/furnishers";
 
-const prisma = new PrismaClient();
+const databaseUrl = resolveDbUrl();
+const prisma = new PrismaClient({
+  datasources: { db: { url: databaseUrl } },
+});
 
 async function main() {
   await prisma.notification.deleteMany();
