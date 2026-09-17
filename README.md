@@ -27,7 +27,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |-------|---------|
 | `/demo` | Consumer sample journey (live letter engine) |
 | `/operator` | Approval desk, mail, hands-free, next wave |
-| `/intake` | Paste/parse report text → create case |
+| `/intake` | **Upload credit report PDF** (paste text is secondary) |
 | `/cases/[id]` | Consumer portal (tracking, evidence, outcomes) |
 
 ## Scripts

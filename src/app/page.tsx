@@ -24,22 +24,22 @@ export default function HomePage() {
               Credit repair that works on your report — not your hope.
             </h1>
             <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-fog/75">
-              Upload your credit report. We find what to dispute, prepare the
-              letters, and can mail them for you.
+              Upload your credit report PDF. We find what to dispute, prepare
+              the letters, and can mail them for you.
             </p>
             <div className="animate-rise-delay-3 mt-9 flex flex-wrap gap-3">
               <Link
-                href="/demo"
+                href="/intake"
                 className="inline-flex h-12 items-center justify-center bg-paper px-6 text-sm font-semibold text-ink transition hover:bg-fog"
               >
-                See how it works
+                Upload your PDF
               </Link>
-              <a
-                href="#how-it-works"
+              <Link
+                href="/demo"
                 className="inline-flex h-12 items-center justify-center border border-paper/25 px-6 text-sm font-semibold text-paper transition hover:border-paper/50 hover:bg-white/5"
               >
-                The process
-              </a>
+                See a sample first
+              </Link>
             </div>
           </div>
 
