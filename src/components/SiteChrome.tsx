@@ -54,14 +54,14 @@ export function SiteHeader({ tone = "light" }: { tone?: "light" | "dark" }) {
 
       <div className="flex items-center gap-3">
         <Link
-          href="/demo"
+          href="/intake"
           className={`inline-flex h-11 items-center justify-center px-5 text-sm font-semibold transition ${
             dark
               ? "bg-paper text-ink hover:bg-fog"
               : "bg-ink text-paper hover:bg-ink-soft"
           }`}
         >
-          Start your review
+          Upload your PDF
         </Link>
       </div>
     </header>
@@ -80,6 +80,9 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-fog/70">
+          <Link href="/intake" className="hover:text-paper">
+            Upload PDF
+          </Link>
           <Link href="/demo" className="hover:text-paper">
             See a sample
           </Link>
@@ -88,9 +91,6 @@ export function SiteFooter() {
           </Link>
           <Link href="/#how-it-works" className="hover:text-paper">
             How it works
-          </Link>
-          <Link href="/#why-us" className="hover:text-paper">
-            Why us
           </Link>
         </div>
       </div>

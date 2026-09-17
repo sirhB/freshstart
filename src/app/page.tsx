@@ -24,22 +24,22 @@ export default function HomePage() {
               Credit repair that works on your report — not your hope.
             </h1>
             <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-fog/75">
-              Upload your credit report. We find what to dispute, prepare the
-              letters, and can mail them for you.
+              Upload your credit report PDF. We find what to dispute, prepare
+              the letters, and can mail them for you.
             </p>
             <div className="animate-rise-delay-3 mt-9 flex flex-wrap gap-3">
               <Link
-                href="/demo"
+                href="/intake"
                 className="inline-flex h-12 items-center justify-center bg-paper px-6 text-sm font-semibold text-ink transition hover:bg-fog"
               >
-                See how it works
+                Upload your PDF
               </Link>
-              <a
-                href="#how-it-works"
+              <Link
+                href="/demo"
                 className="inline-flex h-12 items-center justify-center border border-paper/25 px-6 text-sm font-semibold text-paper transition hover:border-paper/50 hover:bg-white/5"
               >
-                The process
-              </a>
+                See a sample first
+              </Link>
             </div>
           </div>
 
@@ -130,19 +130,28 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 border border-line bg-paper px-8 py-12 sm:px-12 lg:flex-row lg:items-center">
           <div>
             <h2 className="font-display text-3xl text-ink sm:text-4xl">
-              Watch a sample repair in two minutes
+              Start with your credit report PDF
             </h2>
             <p className="mt-3 max-w-xl text-muted">
-              Use a sample credit report, see flagged items, and preview the
-              letters Fresh Start would prepare for someone in your shoes.
+              Upload the file from your bureau or AnnualCreditReport.com. We’ll
+              extract accounts and build your dispute plan — or try a sample
+              journey first.
             </p>
           </div>
-          <Link
-            href="/demo"
-            className="inline-flex h-12 shrink-0 items-center justify-center bg-ink px-7 text-sm font-semibold text-paper transition hover:bg-ink-soft"
-          >
-            Try the sample
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/intake"
+              className="inline-flex h-12 shrink-0 items-center justify-center bg-ink px-7 text-sm font-semibold text-paper transition hover:bg-ink-soft"
+            >
+              Upload PDF
+            </Link>
+            <Link
+              href="/demo"
+              className="inline-flex h-12 shrink-0 items-center justify-center border border-ink px-7 text-sm font-semibold text-ink transition hover:bg-mist"
+            >
+              See a sample
+            </Link>
+          </div>
         </div>
       </section>
 
