@@ -49,6 +49,7 @@ type Bundle = {
   evidenceCoach?: CoachItem[];
   mailBlocked?: boolean;
   mailBlockedMessages?: string[];
+  mailBlockedCount?: number;
   conflicts?: {
     key: string;
     creditor: string;
@@ -230,8 +231,16 @@ export function CasePortal({
         </p>
         {bundle.mailBlocked && (
           <p className="mt-3 border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
-            Mailing blocked until evidence is complete:{" "}
-            {(bundle.mailBlockedMessages ?? []).join(" · ")}
+            Mailing blocked until evidence is complete
+            {(bundle.mailBlockedCount ?? bundle.mailBlockedMessages?.length ?? 0) > 0
+              ? ` (${bundle.mailBlockedCount ?? bundle.mailBlockedMessages!.length} item${
+                  (bundle.mailBlockedCount ?? bundle.mailBlockedMessages!.length) === 1
+                    ? ""
+                    : "s"
+                })`
+              : ""}
+            : {(bundle.mailBlockedMessages ?? []).slice(0, 3).join(" · ")}
+            {(bundle.mailBlockedCount ?? 0) > 3 ? " …" : ""}
           </p>
         )}
         <div className="mt-4 flex flex-wrap gap-3 text-sm">

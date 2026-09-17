@@ -225,7 +225,17 @@ export async function getCaseBundle(caseId: string) {
       matchedAccountHint: e.matchedAccountHint,
     })),
   );
-  const mailGate = mailBlockedByEvidence(coach);
+  // Only gate mailing on items that are in-play (recommended / approved / queued).
+  const mailCoach = coach.filter((c) => {
+    const row = disputeCase.items.find((x) => x.id === c.itemId);
+    const status = row?.status ?? "proposed";
+    const classifiedItem = classified.find((i) => i.id === c.itemId);
+    return (
+      Boolean(classifiedItem?.recommended) ||
+      ["approved", "queued", "mailed", "investigating"].includes(status)
+    );
+  });
+  const mailGate = mailBlockedByEvidence(mailCoach);
   const ranked = rankDisputeItems(classified, coach);
   const suggestedWave = suggestWave(ranked, 5);
   const conflicts = findCrossBureauConflicts(conflictRowsFromItems(classified));
@@ -244,7 +254,8 @@ export async function getCaseBundle(caseId: string) {
     })),
     evidenceCoach: coach,
     mailBlocked: mailGate.blocked,
-    mailBlockedMessages: mailGate.messages,
+    mailBlockedMessages: mailGate.messages.slice(0, 5),
+    mailBlockedCount: mailGate.messages.length,
     impactRanking: ranked.map((r) => ({
       itemId: r.item.id,
       impact: r.impact,
