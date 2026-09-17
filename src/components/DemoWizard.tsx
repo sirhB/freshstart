@@ -101,9 +101,9 @@ export function DemoWizard() {
             See what Fresh Start does with a credit report
           </h1>
           <p className="mt-3 max-w-xl text-base text-muted">
-            This walkthrough uses a sample file for {DEMO_CLIENT.name}. Upload
-            any PDF or use ours, then preview dispute letters — analysis is
-            simulated for the demo.
+            This walkthrough uses a sample file for {DEMO_CLIENT.name}. The
+            dispute engine classifies items with FCRA grounds and builds
+            CFPB-structured bureau letters you can download.
           </p>
         </div>
         <Link href="/" className="text-sm font-medium text-ink-soft underline-offset-4 hover:underline">
@@ -230,7 +230,7 @@ export function DemoWizard() {
               · Flagging negative items across bureaus
             </li>
             <li className={progress >= 92 ? "text-ink" : ""}>
-              · Preparing dispute recommendations
+              · Scoring FCRA grounds and evidence needs
             </li>
           </ul>
         </section>
@@ -279,9 +279,13 @@ export function DemoWizard() {
                             Suggested
                           </span>
                         )}
+                        <span className="font-mono text-[10px] uppercase tracking-wide text-brass">
+                          {item.groundCode}
+                        </span>
                       </div>
                       <p className="mt-1 text-sm text-muted">
-                        {item.accountType} · {item.status}
+                        {item.accountType} · {item.status} ·{" "}
+                        {(item.confidence * 100).toFixed(0)}% confidence
                       </p>
                       <p className="mt-2 text-sm text-ink-soft">{item.disputeGround}</p>
                     </div>
@@ -305,8 +309,12 @@ export function DemoWizard() {
           <div>
             <h2 className="font-display text-3xl text-ink">Your dispute letters</h2>
             <p className="mt-2 text-sm text-muted">
-              One letter per bureau. Keep a copy, or have Fresh Start mail them
-              for you.
+              CFPB-structured letters — one per bureau that reports your selected
+              items. Review them here, or manage approvals in the{" "}
+              <Link href="/operator" className="underline underline-offset-4">
+                operator desk
+              </Link>
+              .
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
