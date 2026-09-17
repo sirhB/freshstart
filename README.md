@@ -67,4 +67,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Roadmap / architecture
 
-See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md). Live Lob postage and bureau APIs remain swap-in replacements for the current simulated mail/parse adapters.
+- Architecture: [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md)
+- **Executing now (Tier 2 & 3):** [docs/TIER_2_3_EXECUTION.md](docs/TIER_2_3_EXECUTION.md)
+- **Deferred pre-launch (Tier 1 & 4):** [docs/PRE_LAUNCH_TODO.md](docs/PRE_LAUNCH_TODO.md)
+
+Live Lob postage, auth, CROA consent, and bureau data APIs are tracked in Pre-Launch — not in the current execution pass.
