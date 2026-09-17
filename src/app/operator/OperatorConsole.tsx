@@ -65,14 +65,16 @@ type CaseBundle = {
 
 export function OperatorConsole({
   initialCases = [],
+  initialBundle = null,
 }: {
   initialCases?: CaseListItem[];
+  initialBundle?: CaseBundle | null;
 }) {
   const [cases, setCases] = useState<CaseListItem[]>(initialCases);
   const [activeId, setActiveId] = useState<string | null>(
     initialCases[0]?.id ?? null,
   );
-  const [bundle, setBundle] = useState<CaseBundle | null>(null);
+  const [bundle, setBundle] = useState<CaseBundle | null>(initialBundle);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "denied">>({});
   const [activePacketId, setActivePacketId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

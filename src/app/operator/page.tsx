@@ -1,5 +1,5 @@
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
-import { listCases } from "@/lib/cases";
+import { getCaseBundle, listCases } from "@/lib/cases";
 import { OperatorConsole } from "./OperatorConsole";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,17 @@ export default async function OperatorPage() {
     approvals: c.approvals,
   }));
 
+  const firstId = initialCases[0]?.id;
+  const firstBundle = firstId ? await getCaseBundle(firstId) : null;
+
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
       <main className="paper-grain flex-1 px-5 py-10 sm:px-8 lg:px-12">
-        <OperatorConsole initialCases={initialCases} />
+        <OperatorConsole
+          initialCases={initialCases}
+          initialBundle={firstBundle ? JSON.parse(JSON.stringify(firstBundle)) : null}
+        />
       </main>
       <SiteFooter />
     </div>
