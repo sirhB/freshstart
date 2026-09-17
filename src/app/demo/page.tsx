@@ -2,9 +2,9 @@ import { DemoWizard } from "@/components/DemoWizard";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 
 export const metadata = {
-  title: "Demo — Fresh Start Agency",
+  title: "Sample journey — Fresh Start",
   description:
-    "Interactive Fresh Start demo: upload a credit report, review disputes, generate letters, and queue mailing.",
+    "See how Fresh Start reviews a credit report, builds disputes, and prepares bureau letters you can download or mail.",
 };
 
 export default function DemoPage() {

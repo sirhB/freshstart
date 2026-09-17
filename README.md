@@ -1,6 +1,6 @@
 # Fresh Start
 
-Agency operating desk for credit repair — intake client credit report PDFs, generate dispute letters, and deliver or mail on their behalf.
+Personal credit repair for consumers — upload your credit report PDF, review disputable items, generate bureau letters, and download them or have Fresh Start mail them for you.
 
 ## Stack
 
@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Interactive agency demo lives at `/demo`.
+Open [http://localhost:3000](http://localhost:3000). Interactive sample journey: `/demo`.
 
 ## Notes
 
