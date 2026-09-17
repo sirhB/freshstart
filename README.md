@@ -21,7 +21,7 @@ npm run db:seed
 npm run dev
 ```
 
-Set `DB_URL` for the database (Prisma schema). On Render you can set `DB_URL`, or leave the host’s `DATABASE_URL` — startup aliases it to `DB_URL`.
+Set `DB_URL` for the database (Prisma schema). On Render you can set `DB_URL`, or leave the host’s `DATABASE_URL` — startup aliases it to `DB_URL`. If neither is set, the app falls back to `file:./prisma/prod.db` so builds succeed (SQLite on Render is ephemeral; use Postgres for durable data). See `render.yaml`.
 
 Open [http://localhost:3000](http://localhost:3000).
 

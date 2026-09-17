@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node scripts/with-db-url.cjs next dev",
     "build": "node scripts/with-db-url.cjs prisma generate && next build",
-    "start": "node scripts/with-db-url.cjs next start",
+    "start": "node scripts/with-db-url.cjs prisma migrate deploy && node scripts/with-db-url.cjs next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
