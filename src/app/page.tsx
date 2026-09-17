@@ -21,25 +21,24 @@ export default function HomePage() {
               Fresh Start
             </p>
             <h1 className="animate-rise-delay-1 mt-6 max-w-xl text-xl font-medium leading-snug text-fog sm:text-2xl">
-              The agency desk for credit repair — intake reports, craft dispute
-              letters, deliver or mail.
+              Credit repair that works on your report — not your hope.
             </h1>
             <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-fog/75">
-              Upload a client PDF, review flagged items, generate bureau packets,
-              then hand letters over — or mail them from your desk.
+              Upload your credit report. We find what to dispute, prepare the
+              letters, and can mail them for you.
             </p>
             <div className="animate-rise-delay-3 mt-9 flex flex-wrap gap-3">
               <Link
                 href="/demo"
                 className="inline-flex h-12 items-center justify-center bg-paper px-6 text-sm font-semibold text-ink transition hover:bg-fog"
               >
-                Try the interactive demo
+                See how it works
               </Link>
               <a
-                href="#workflow"
+                href="#how-it-works"
                 className="inline-flex h-12 items-center justify-center border border-paper/25 px-6 text-sm font-semibold text-paper transition hover:border-paper/50 hover:bg-white/5"
               >
-                See the workflow
+                The process
               </a>
             </div>
           </div>
@@ -50,36 +49,36 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="workflow" className="paper-grain border-t border-line px-5 py-24 sm:px-8 lg:px-12">
+      <section id="how-it-works" className="paper-grain border-t border-line px-5 py-24 sm:px-8 lg:px-12">
         <div className="mx-auto max-w-6xl">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
-            Workflow
+            How it works
           </p>
           <h2 className="mt-3 max-w-2xl font-display text-4xl tracking-tight text-ink sm:text-5xl">
-            One composition from report to mailbox
+            From your report to the bureaus
           </h2>
           <p className="mt-4 max-w-2xl text-base text-muted">
-            Fresh Start is designed for agency teams — not a consumer DIY
-            gimmick. Your desk owns the client record, the dispute round, and
-            the mailing decision.
+            Fresh Start is built for people who want inaccurate or unfinished
+            items challenged clearly — with letters you can keep, or that we
+            send on your behalf.
           </p>
 
           <div className="mt-14 grid gap-10 md:grid-cols-3">
             {[
               {
                 step: "01",
-                title: "Intake the report",
-                copy: "Attach a client PDF from any major bureau export. The demo simulates extraction; production will parse tradelines automatically.",
+                title: "Share your report",
+                copy: "Upload a PDF of your credit report. We’ll review accounts, collections, and inquiries across the bureaus.",
               },
               {
                 step: "02",
-                title: "Select disputes",
-                copy: "Review flagged accounts, inquiries, and collections. Keep recommended items or curate the round yourself.",
+                title: "We build your disputes",
+                copy: "You see what we’re challenging and why. Nothing goes out without a clear basis tied to your file.",
               },
               {
                 step: "03",
-                title: "Deliver or mail",
-                copy: "Generate Equifax, Experian, and TransUnion letters. Download for the client — or queue mailing on their behalf.",
+                title: "Letters in your hands — or theirs",
+                copy: "Download bureau-ready letters, or let Fresh Start mail them for you so the process keeps moving.",
               },
             ].map((item) => (
               <div key={item.step} className="border-t border-ink/15 pt-6">
@@ -94,27 +93,27 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="operations" className="bg-ink px-5 py-24 text-paper sm:px-8 lg:px-12">
+      <section id="why-us" className="bg-ink px-5 py-24 text-paper sm:px-8 lg:px-12">
         <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brass">
-              Operations
+              Why Fresh Start
             </p>
             <h2 className="mt-3 font-display text-4xl tracking-tight sm:text-5xl">
-              Built like a firm, paced like a product
+              A personal company that treats your file with care
             </h2>
             <p className="mt-4 text-base leading-relaxed text-fog/75">
-              Polished enough for clients to trust. Structured enough for your
-              team to run rounds without spreadsheet chaos.
+              No generic templates dumped on every account. We focus on your
+              report, your items, and a path you can follow.
             </p>
           </div>
 
           <ul className="space-y-0 border-t border-white/10">
             {[
-              "Client-centric desk with report history per file",
-              "Bureau-specific letter packets with clear dispute grounds",
-              "Download for DIY handoff or queue for agency mailing",
-              "Compliance-minded language and audit stubs for future rounds",
+              "Clear review of what’s hurting your credit",
+              "Dispute letters written for each bureau",
+              "Download your packet — or have us mail it",
+              "Straight talk about process, timing, and expectations",
             ].map((line) => (
               <li
                 key={line}
@@ -131,18 +130,18 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 border border-line bg-paper px-8 py-12 sm:px-12 lg:flex-row lg:items-center">
           <div>
             <h2 className="font-display text-3xl text-ink sm:text-4xl">
-              Walk the desk in under two minutes
+              Watch a sample repair in two minutes
             </h2>
             <p className="mt-3 max-w-xl text-muted">
-              No account required. Use the sample PDF, generate letters, and see
-              how Fresh Start feels as an agency operating system.
+              Use a sample credit report, see flagged items, and preview the
+              letters Fresh Start would prepare for someone in your shoes.
             </p>
           </div>
           <Link
             href="/demo"
             className="inline-flex h-12 shrink-0 items-center justify-center bg-ink px-7 text-sm font-semibold text-paper transition hover:bg-ink-soft"
           >
-            Launch demo
+            Try the sample
           </Link>
         </div>
       </section>

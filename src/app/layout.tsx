@@ -15,9 +15,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Fresh Start — Credit repair ops for agencies",
+  title: "Fresh Start — Personal credit repair",
   description:
-    "Fresh Start helps credit repair agencies intake client reports, generate dispute letters, and mail on their behalf — from one professional desk.",
+    "Fresh Start helps you repair your credit: upload your report, review disputes, and get letters mailed for you.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
