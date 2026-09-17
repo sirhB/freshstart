@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0c2e2b;
+  --ink-soft: #1a4540;
+  --fog: #dde6e3;
+  --mist: #eef3f1;
+  --paper: #f5f8f7;
+  --line: #c5d2cd;
+  --muted: #5a6f6a;
+  --signal: #2f7a66;
+  --signal-deep: #1f5a4b;
+  --brass: #a68b5b;
+  --danger: #9b4a3c;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-fog: var(--fog);
+  --color-mist: var(--mist);
+  --color-paper: var(--paper);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-signal: var(--signal);
+  --color-signal-deep: var(--signal-deep);
+  --color-brass: var(--brass);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-fraunces);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), system-ui, sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal) 28%, white);
+  color: var(--ink);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes ink-draw {
+  from {
+    stroke-dashoffset: 240;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-rise-delay-1 {
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.animate-rise-delay-2 {
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+
+.animate-rise-delay-3 {
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
+}
+
+.animate-drift {
+  animation: drift 5.5s ease-in-out infinite alternate;
+}
+
+.hero-atmosphere {
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(47, 122, 102, 0.22), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(166, 139, 91, 0.14), transparent 50%),
+    linear-gradient(165deg, #0a2421 0%, #123832 42%, #1a4540 72%, #0f2f2b 100%);
+}
+
+.paper-grain {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0)),
+    radial-gradient(circle at 20% 10%, rgba(47, 122, 102, 0.06), transparent 40%),
+    radial-gradient(circle at 90% 30%, rgba(166, 139, 91, 0.07), transparent 35%),
+    linear-gradient(180deg, var(--mist), var(--paper));
+}
+
+.letter-sheet {
+  background:
+    linear-gradient(90deg, transparent 39px, rgba(155, 74, 60, 0.12) 39px, rgba(155, 74, 60, 0.12) 41px, transparent 41px),
+    linear-gradient(var(--paper), #fbfcfc);
+  box-shadow:
+    0 1px 0 rgba(12, 46, 43, 0.04),
+    0 18px 40px rgba(12, 46, 43, 0.12);
+}
+
+.progress-shimmer {
+  background: linear-gradient(90deg, var(--fog), #fff, var(--fog));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
