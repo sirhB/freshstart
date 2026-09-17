@@ -42,8 +42,16 @@ function daysLeft(due?: string | null) {
   return Math.ceil((new Date(due).getTime() - Date.now()) / 86400000);
 }
 
-export function CasePortal({ caseId }: { caseId: string }) {
-  const [bundle, setBundle] = useState<Bundle | null>(null);
+export function CasePortal({
+  caseId,
+  initialBundle = null,
+}: {
+  caseId: string;
+  initialBundle?: Bundle | null;
+}) {
+  const [bundle, setBundle] = useState<Bundle | null>(
+    initialBundle as Bundle | null,
+  );
   const [notifications, setNotifications] = useState<
     { id: string; title: string; body: string; read: boolean; createdAt: string }[]
   >([]);

@@ -63,9 +63,15 @@ type CaseBundle = {
   auditLogs: { id: string; action: string; actor: string; createdAt: string }[];
 };
 
-export function OperatorConsole() {
-  const [cases, setCases] = useState<CaseListItem[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+export function OperatorConsole({
+  initialCases = [],
+}: {
+  initialCases?: CaseListItem[];
+}) {
+  const [cases, setCases] = useState<CaseListItem[]>(initialCases);
+  const [activeId, setActiveId] = useState<string | null>(
+    initialCases[0]?.id ?? null,
+  );
   const [bundle, setBundle] = useState<CaseBundle | null>(null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "denied">>({});
   const [activePacketId, setActivePacketId] = useState<string | null>(null);
