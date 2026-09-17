@@ -236,6 +236,43 @@ Notes: not mine
     expect(parsed.tradelines[0].creditor).toMatch(/Midland/i);
     expect(parsed.tradelines[0].signals?.notMine).toBe(true);
   });
+
+  it("ignores TransUnion Account Details / status boilerplate", () => {
+    const parsed = parseCreditReportText(`
+TransUnion Credit Report
+Report date: September 12, 2026
+
+Account: Details
+Account number: ****0000
+Status: Unknown
+
+Account: Information
+Balance: $0
+Status: Current
+
+Account: status
+Status: of an ongoing dispute with TransUnion.
+
+Account: closed by credit grantor
+Status: Closed
+Type: Account
+
+Account: information disputed by consumer
+Status: Disputed
+
+Account: Midland Credit Management
+Account number: ****4412
+Type: Collection
+Status: Open collection
+Balance: $1,204
+Opened: 11/2020
+Notes: not mine
+`);
+    expect(parsed.tradelines.map((t) => t.creditor)).toEqual([
+      "Midland Credit Management",
+    ]);
+    expect(parsed.warnings.some((w) => /boilerplate/i.test(w))).toBe(true);
+  });
 });
 
 describe("outcomes + reinsertion", () => {
@@ -297,6 +334,22 @@ describe("evidence + cross-bureau", () => {
       },
     ]);
     expect(conflicts.length).toBe(1);
+  });
+
+  it("does not flag same-bureau duplicates as cross-bureau conflicts", () => {
+    const conflicts = findCrossBureauConflicts([
+      {
+        creditor: "Information",
+        status: "Paid",
+        bureau: "TransUnion",
+      },
+      {
+        creditor: "Information",
+        status: "Current",
+        bureau: "TransUnion",
+      },
+    ]);
+    expect(conflicts).toHaveLength(0);
   });
 });
 

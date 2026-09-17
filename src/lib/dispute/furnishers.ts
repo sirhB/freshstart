@@ -95,6 +95,9 @@ export function findCrossBureauConflicts(
   const conflicts: CrossBureauConflict[] = [];
   for (const [key, list] of groups) {
     if (list.length < 2) continue;
+    const bureauSet = new Set(list.map((r) => r.bureau));
+    // Same-bureau duplicates are not cross-bureau conflicts (often parse noise).
+    if (bureauSet.size < 2) continue;
     const fields: CrossBureauConflict["fields"] = [];
     for (const field of ["status", "balance", "dateOpened"] as const) {
       const values = list

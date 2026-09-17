@@ -12,8 +12,102 @@ export type ParsedReport = {
 const BUREAU_ALIASES: { bureau: Bureau; patterns: RegExp[] }[] = [
   { bureau: "Equifax", patterns: [/\bequifax\b/i] },
   { bureau: "Experian", patterns: [/\bexperian\b/i] },
-  { bureau: "TransUnion", patterns: [/\btrans ?union\b/i, /\bTU\b/] },
+  { bureau: "TransUnion", patterns: [/\btrans\s*-?\s*union\b/i, /\bTU\b/] },
 ];
+
+/** Labels that follow "Account …" in bureau PDF boilerplate — not creditor names. */
+const NOISE_CREDITORS = new Set(
+  [
+    "details",
+    "detail",
+    "information",
+    "info",
+    "status",
+    "type",
+    "number",
+    "history",
+    "summary",
+    "overview",
+    "name",
+    "s",
+    "rating",
+    "remarks",
+    "comment",
+    "comments",
+    "balance",
+    "payment",
+    "payments",
+    "opened",
+    "closed",
+    "responsibility",
+    "terms",
+    "high credit",
+    "credit limit",
+    "past due",
+    "date opened",
+    "date closed",
+    "account type",
+    "account number",
+    "account status",
+    "account details",
+    "account information",
+    "closed by credit grantor",
+    "information disputed by consumer",
+    "of an ongoing dispute with transunion",
+    "of an ongoing dispute with experian",
+    "of an ongoing dispute with equifax",
+    "in dispute",
+    "disputed",
+    "unknown",
+    "n/a",
+    "none",
+    "see below",
+  ].map((s) => s.toLowerCase()),
+);
+
+const KNOWN_STATUS =
+  /\b(paid|open|closed|current|collection|charge[- ]?off|late|derogatory|in\s+dispute|settled|repossession|foreclosure|included\s+in\s+bankruptcy|hard\s+pull|inquiry)\b/i;
+
+function normalizeCreditorKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function isNoiseCreditor(name: string): boolean {
+  const key = normalizeCreditorKey(name);
+  if (!key || key.length < 2) return true;
+  if (NOISE_CREDITORS.has(key)) return true;
+  if (/^(account|creditor|tradeline)\b/i.test(key)) return true;
+  if (/disputed by consumer|closed by credit grantor|ongoing dispute/i.test(key)) {
+    return true;
+  }
+  // Single generic words / field labels
+  if (/^(details?|information|status|type|balance|remarks?)$/i.test(key)) return true;
+  return false;
+}
+
+function looksLikeRealTradeline(t: {
+  creditor: string;
+  accountNumber?: string;
+  status: string;
+  balance?: string;
+  accountType: string;
+}): boolean {
+  if (isNoiseCreditor(t.creditor)) return false;
+  // Creditor should look like an org/person name, not a sentence fragment
+  if (t.creditor.split(/\s+/).length > 8) return false;
+  if (/^[a-z]/.test(t.creditor) && t.creditor.length < 4) return false;
+
+  const hasAccount = Boolean(t.accountNumber && /[\d*]{3,}/.test(t.accountNumber));
+  const hasBalance = Boolean(t.balance && /[\d]/.test(t.balance));
+  const hasStatus = KNOWN_STATUS.test(t.status) && t.status.length < 80;
+  const hasType =
+    /collection|installment|revolving|mortgage|inquiry|credit\s*card|auto|student|charge/i.test(
+      t.accountType,
+    );
+
+  // Need at least one account-like signal beyond a bare label
+  return hasAccount || hasBalance || (hasStatus && hasType) || (hasStatus && hasAccount);
+}
 
 /**
  * Phase 3 spike: parse plain-text credit report extracts into tradelines.
@@ -33,21 +127,28 @@ export function parseCreditReportText(text: string): ParsedReport {
     text.match(/report\s*date\s*[:#]?\s*([A-Za-z]+ \d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i)?.[1];
 
   const tradelines: TradelineInput[] = [];
+  // Require a delimiter (colon) or "Account name" so "Account Details" is not a creditor.
   const blockRe =
-    /(?:^|\n)\s*(?:Account|Creditor|Tradeline)\s*[:#]?\s*(.+)\n([\s\S]*?)(?=(?:\n\s*(?:Account|Creditor|Tradeline)\s*[:#]?)|$)/gi;
+    /(?:^|\n)\s*(?:Account\s*name|Creditor\s*name|Tradeline\s*name|Account|Creditor|Tradeline)\s*[:\-–]\s*(.+)\n([\s\S]*?)(?=(?:\n\s*(?:Account\s*name|Creditor\s*name|Tradeline\s*name|Account|Creditor|Tradeline)\s*[:\-–])|$)/gi;
 
   let match: RegExpExecArray | null;
   let idx = 0;
+  let rejectedNoise = 0;
   while ((match = blockRe.exec(text)) !== null) {
     idx += 1;
-    const creditor = match[1].trim().slice(0, 120);
+    const creditor = match[1].trim().replace(/\s+/g, " ").slice(0, 120);
     const body = match[2];
+    if (isNoiseCreditor(creditor)) {
+      rejectedNoise += 1;
+      continue;
+    }
+
     const accountNumber =
       body.match(/account\s*(?:number|#|no\.?)\s*[:#]?\s*([*\dXx-]{4,})/i)?.[1] ??
       body.match(/\*{2,}\d{3,4}/)?.[0];
-    const status =
-      body.match(/status\s*[:#]?\s*(.+)/i)?.[1]?.trim().split("\n")[0] ??
-      "Unknown";
+    const statusRaw =
+      body.match(/status\s*[:#]?\s*(.+)/i)?.[1]?.trim().split("\n")[0] ?? "Unknown";
+    const status = statusRaw.slice(0, 80);
     const balance = body.match(/balance\s*[:#]?\s*(\$?[\d,]+)/i)?.[1];
     const dateOpened =
       body.match(/(?:date\s*opened|opened)\s*[:#]?\s*([\d/]{4,10}|[A-Za-z]+ \d{4})/i)?.[1];
@@ -60,14 +161,29 @@ export function parseCreditReportText(text: string): ParsedReport {
           : "Account");
 
     const bureausInBlock = BUREAU_ALIASES.filter((b) =>
-      b.patterns.some((p) => p.test(body)),
+      b.patterns.some((p) => p.test(body) || p.test(creditor)),
     ).map((b) => b.bureau);
-    const bureaus =
+    const bureaus: Bureau[] =
       bureausInBlock.length > 0
         ? bureausInBlock
-        : bureausDetected.length > 0
+        : bureausDetected.length === 1
           ? bureausDetected
-          : (["Equifax", "Experian", "TransUnion"] as Bureau[]);
+          : bureausDetected.length > 0
+            ? bureausDetected
+            : (["Equifax"] as Bureau[]);
+
+    if (
+      !looksLikeRealTradeline({
+        creditor,
+        accountNumber,
+        status,
+        balance,
+        accountType,
+      })
+    ) {
+      rejectedNoise += 1;
+      continue;
+    }
 
     const signals: TradelineInput["signals"] = {};
     if (/not\s+mine|identity\s+theft|fraud/i.test(body)) signals.notMine = true;
@@ -103,25 +219,33 @@ export function parseCreditReportText(text: string): ParsedReport {
         /^([A-Za-z0-9 &.'/-]{3,40})\s+[|·-]\s+(.+?)\s+[|·-]\s+(\$?[\d,]+|—|-)$/,
       );
       if (!row) continue;
+      const creditor = row[1].trim();
+      if (isNoiseCreditor(creditor)) continue;
       idx += 1;
       tradelines.push({
         id: `parsed_row_${idx}`,
-        creditor: row[1].trim(),
+        creditor,
         accountType: /inquiry/i.test(row[2]) ? "Hard inquiry" : "Account",
         status: row[2].trim(),
         balance: row[3],
         bureaus:
           bureausDetected.length > 0
             ? bureausDetected
-            : ["Equifax", "Experian", "TransUnion"],
+            : (["Equifax"] as Bureau[]),
         signals: {},
       });
     }
     if (tradelines.length === 0) {
       warnings.push(
-        "No tradeline blocks detected. Use 'Account:' / 'Creditor:' headings or pipe-delimited rows.",
+        "No tradeline blocks detected. Use lines like 'Account: Midland Credit' (with a colon) plus Status/Balance.",
       );
     }
+  }
+
+  if (rejectedNoise > 0) {
+    warnings.push(
+      `Ignored ${rejectedNoise} boilerplate “Account …” section(s) that were not real creditors.`,
+    );
   }
 
   const confidence =
@@ -130,7 +254,7 @@ export function parseCreditReportText(text: string): ParsedReport {
       : Math.min(0.95, 0.45 + tradelines.length * 0.08 + (fileNumber ? 0.1 : 0));
 
   if (bureausDetected.length === 0) {
-    warnings.push("No bureau names detected; defaulted tradelines to all three CRAs.");
+    warnings.push("No bureau names detected; defaulted tradelines to Equifax.");
   }
 
   return {
