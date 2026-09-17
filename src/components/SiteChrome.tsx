@@ -44,6 +44,12 @@ export function SiteHeader({ tone = "light" }: { tone?: "light" | "dark" }) {
         >
           Operator
         </Link>
+        <Link
+          href="/intake"
+          className={dark ? "text-fog/85 hover:text-paper" : "text-muted hover:text-ink"}
+        >
+          Intake
+        </Link>
       </nav>
 
       <div className="flex items-center gap-3">

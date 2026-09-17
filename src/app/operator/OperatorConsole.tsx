@@ -40,13 +40,19 @@ type Packet = {
   bodyText: string;
   lintPassed: boolean;
   lintIssues: { code: string; severity: string; message: string }[];
+  trackingNumber?: string | null;
+  mailedAt?: string | null;
+  deliveredAt?: string | null;
 };
 
 type CaseBundle = {
   id: string;
   title: string;
   status: string;
+  waveNumber?: number;
+  investigationDueAt?: string | null;
   consumer: {
+    id?: string;
     fullName: string;
     addressLine1: string;
     cityStateZip: string;
@@ -182,6 +188,31 @@ export function OperatorConsole() {
     }
   }
 
+  async function postAction(path: string, body: Record<string, unknown> = {}) {
+    if (!bundle) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor: "operator", ...body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Action failed");
+      if (data.case) {
+        setBundle(data.case);
+        setActiveId(data.case.id);
+        setActivePacketId(data.case.packets[0]?.id ?? null);
+      }
+      await loadCases();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[240px_1fr]">
       <aside className="space-y-4">
@@ -191,8 +222,8 @@ export function OperatorConsole() {
           </p>
           <h1 className="mt-2 font-display text-3xl text-ink">Approval desk</h1>
           <p className="mt-2 text-sm text-muted">
-            Approve or deny dispute plans and CFPB letter packets. Hands-free
-            auto-approve comes later — you stay on the gates.
+            Approve plans and packets, run hands-free waves, track certified mail,
+            and open the consumer portal.
           </p>
         </div>
         <ul className="space-y-2">
@@ -220,9 +251,14 @@ export function OperatorConsole() {
             </li>
           )}
         </ul>
-        <Link href="/" className="inline-block text-sm text-ink-soft underline-offset-4 hover:underline">
-          ← Fresh Start home
-        </Link>
+        <div className="space-y-2 text-sm">
+          <Link href="/intake" className="block text-ink-soft underline-offset-4 hover:underline">
+            Report intake
+          </Link>
+          <Link href="/" className="block text-ink-soft underline-offset-4 hover:underline">
+            ← Fresh Start home
+          </Link>
+        </div>
       </aside>
 
       <section className="min-w-0 space-y-8">
@@ -243,12 +279,56 @@ export function OperatorConsole() {
             <header className="border-b border-line pb-6">
               <p className="text-xs uppercase tracking-[0.18em] text-brass">
                 {bundle.status.replaceAll("_", " ")}
+                {bundle.waveNumber ? ` · wave ${bundle.waveNumber}` : ""}
+                {bundle.investigationDueAt
+                  ? ` · due ${new Date(bundle.investigationDueAt).toLocaleDateString()}`
+                  : ""}
               </p>
               <h2 className="mt-2 font-display text-4xl text-ink">{bundle.title}</h2>
               <p className="mt-2 text-sm text-muted">
                 {bundle.consumer.fullName} · {bundle.consumer.addressLine1},{" "}
                 {bundle.consumer.cityStateZip}
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href={`/cases/${bundle.id}`}
+                  className="inline-flex h-10 items-center border border-line px-3 text-sm font-semibold text-ink"
+                >
+                  Consumer portal
+                </Link>
+                <button
+                  type="button"
+                  disabled={busy || bundle.status !== "pending_plan_approval"}
+                  onClick={() =>
+                    void postAction(`/api/cases/${bundle.id}/auto-approve`, {
+                      overrideFirstWave: true,
+                    })
+                  }
+                  className="h-10 bg-signal px-3 text-sm font-semibold text-paper disabled:opacity-40"
+                >
+                  Auto-approve plan
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || bundle.status !== "pending_plan_approval"}
+                  onClick={() =>
+                    void postAction(`/api/cases/${bundle.id}/hands-free`, {
+                      overrideFirstWave: true,
+                    })
+                  }
+                  className="h-10 border border-signal px-3 text-sm font-semibold text-signal disabled:opacity-40"
+                >
+                  Hands-free (approve → mail → deliver)
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void postAction(`/api/cases/${bundle.id}/next-wave`)}
+                  className="h-10 border border-ink px-3 text-sm font-semibold text-ink disabled:opacity-40"
+                >
+                  Open next wave
+                </button>
+              </div>
             </header>
 
             <div>
@@ -337,18 +417,29 @@ export function OperatorConsole() {
                     approve.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={
-                    busy ||
-                    !bundle.packets.some((p) => p.status === "approved") ||
-                    bundle.status === "investigating"
-                  }
-                  onClick={() => void mailApproved()}
-                  className="h-11 border border-ink px-5 text-sm font-semibold text-ink disabled:opacity-40"
-                >
-                  Queue certified mail (simulated)
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !bundle.packets.some((p) => p.status === "approved")
+                    }
+                    onClick={() => void mailApproved()}
+                    className="h-11 border border-ink px-5 text-sm font-semibold text-ink disabled:opacity-40"
+                  >
+                    Queue certified mail
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      busy || !bundle.packets.some((p) => p.status === "mailed")
+                    }
+                    onClick={() => void postAction(`/api/cases/${bundle.id}/deliver`)}
+                    className="h-11 bg-ink px-5 text-sm font-semibold text-paper disabled:opacity-40"
+                  >
+                    Mark delivered + start clock
+                  </button>
+                </div>
               </div>
 
               <div className="mb-4 flex flex-wrap gap-2">
@@ -401,6 +492,12 @@ export function OperatorConsole() {
                       </ul>
                     </div>
                     <div className="flex gap-2">
+                      <a
+                        href={`/api/packets/${activePacket.id}/pdf`}
+                        className="inline-flex h-11 flex-1 items-center justify-center border border-line px-3 text-sm font-semibold text-ink"
+                      >
+                        PDF
+                      </a>
                       <button
                         type="button"
                         disabled={
@@ -422,6 +519,17 @@ export function OperatorConsole() {
                         Deny
                       </button>
                     </div>
+                    {(activePacket.trackingNumber || activePacket.mailedAt) && (
+                      <p className="text-xs text-muted">
+                        Tracking: {activePacket.trackingNumber ?? "—"}
+                        {activePacket.mailedAt
+                          ? ` · mailed ${new Date(activePacket.mailedAt).toLocaleString()}`
+                          : ""}
+                        {activePacket.deliveredAt
+                          ? ` · delivered ${new Date(activePacket.deliveredAt).toLocaleString()}`
+                          : ""}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

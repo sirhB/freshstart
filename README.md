@@ -7,8 +7,9 @@ Personal credit repair for consumers — upload your credit report PDF, review d
 - Next.js (App Router)
 - TypeScript
 - Tailwind CSS
-- Prisma + SQLite (Phase 0 persistence)
-- Vitest (dispute engine tests)
+- Prisma + SQLite
+- PDFKit (letter PDFs) + pdf-parse (report intake)
+- Vitest
 
 ## Develop
 
@@ -22,27 +23,48 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-- Interactive sample journey: `/demo`
-- Operator approval desk: `/operator`
+| Route | Purpose |
+|-------|---------|
+| `/demo` | Consumer sample journey (live letter engine) |
+| `/operator` | Approval desk, mail, hands-free, next wave |
+| `/intake` | Paste/parse report text → create case |
+| `/cases/[id]` | Consumer portal (tracking, evidence, outcomes) |
 
 ## Scripts
 
 | Command | Purpose |
 |---------|---------|
 | `npm run dev` | Next.js dev server |
-| `npm test` | Dispute engine + letter lint tests |
-| `npm run db:seed` | Seed sample consumer / case / CFPB packets |
+| `npm test` | Engine + platform tests |
+| `npm run db:seed` | Seed sample case + furnisher directory |
 | `npm run build` | Production build |
 
-## What’s built (Phase 0/1)
+## What’s built
 
-- FCRA ground taxonomy + rules classifier (skips accurate-but-negative items)
-- CFPB-structured CRA and furnisher letter generator
-- Compliance linter (blocks vague / guarantee / accurate-looking mailings)
-- Prisma case model with approval gates + audit log
-- Operator console to approve/deny dispute plans and letter packets
-- Demo wired to the real letter engine
+**Phase 0/1**
+- FCRA ground taxonomy + rules classifier
+- CFPB CRA/furnisher letters + compliance linter
+- Prisma cases, packets, approval gates, audit log
+- Operator approve/deny desk
 
-## Roadmap
+**Phase 2**
+- Simulated certified mail tracking numbers
+- Delivery + FCRA investigation clocks
+- Letter PDF download
 
-See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md) for the hands-free automation architecture, human approval gates, CFPB-aligned dispute letter strategy, and later phases (PDF parse, Lob certified mail, auto-approve policies).
+**Phase 3**
+- Credit report text/PDF parse spike
+- Evidence matching + confidence boost
+- Cross-bureau conflict helpers
+- Furnisher address directory
+
+**Phase 4**
+- Auto-approve policy engine
+- Hands-free wave (approve → mail → deliver)
+- Response outcome classification
+- Next-wave scheduler + reinsertion detection
+- In-app / email-stub notifications
+
+## Roadmap / architecture
+
+See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md). Live Lob postage and bureau APIs remain swap-in replacements for the current simulated mail/parse adapters.

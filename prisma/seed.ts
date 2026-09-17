@@ -6,10 +6,14 @@ import {
   SAMPLE_REPORT_DATE,
   SAMPLE_TRADELINES,
 } from "../src/lib/dispute/sample-data";
+import { FURNISHER_DIRECTORY } from "../src/lib/dispute/furnishers";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.notification.deleteMany();
+  await prisma.outcomeEvent.deleteMany();
+  await prisma.evidenceDocument.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.approvalGate.deleteMany();
   await prisma.letterPacket.deleteMany();
@@ -18,6 +22,18 @@ async function main() {
   await prisma.creditReport.deleteMany();
   await prisma.disputeCase.deleteMany();
   await prisma.consumer.deleteMany();
+  await prisma.furnisherAddress.deleteMany();
+
+  for (const f of FURNISHER_DIRECTORY) {
+    await prisma.furnisherAddress.create({
+      data: {
+        name: f.name,
+        addressLines: f.addressLines.join("\n"),
+        source: "manual",
+        verifiedAt: new Date(),
+      },
+    });
+  }
 
   const consumer = await prisma.consumer.create({
     data: {
@@ -27,6 +43,7 @@ async function main() {
       dateOfBirth: SAMPLE_CONSUMER.dateOfBirth,
       phone: SAMPLE_CONSUMER.phone,
       ssnLast4: SAMPLE_CONSUMER.ssnLast4,
+      email: "jordan.hale@example.com",
     },
   });
 
@@ -92,8 +109,9 @@ async function main() {
         remedy: item.remedy,
         confidence: item.confidence,
         recommended: item.recommended,
-        status: item.recommended ? "proposed" : "proposed",
+        status: "proposed",
         evidenceNotes: item.evidenceNotes,
+        riskFlagsJson: JSON.stringify(item.riskFlags),
       },
     });
   }
@@ -111,10 +129,7 @@ async function main() {
 
   const recommended = classified.filter((c) => c.recommended);
   const letters = buildDisputePacket({
-    consumer: {
-      ...SAMPLE_CONSUMER,
-      reportFileNumber: SAMPLE_CONSUMER.reportFileNumber,
-    },
+    consumer: SAMPLE_CONSUMER,
     items: recommended,
     asOf: new Date("2026-09-17"),
     includeFurnisherLetters: true,
@@ -140,6 +155,16 @@ async function main() {
     });
   }
 
+  await prisma.notification.create({
+    data: {
+      consumerId: consumer.id,
+      caseId: disputeCase.id,
+      title: "Welcome to Fresh Start",
+      body: "Your sample dispute plan is ready for operator review.",
+      channel: "in_app",
+    },
+  });
+
   await prisma.auditLog.create({
     data: {
       caseId: disputeCase.id,
@@ -158,6 +183,7 @@ async function main() {
       {
         consumerId: consumer.id,
         caseId: disputeCase.id,
+        portal: `/cases/${disputeCase.id}`,
         recommended: recommended.length,
         packets: letters.length,
       },
