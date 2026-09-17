@@ -111,7 +111,7 @@ export function DemoWizard() {
         </Link>
       </div>
 
-      <ol className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol className="sticky top-0 z-10 mb-8 grid grid-cols-2 gap-2 bg-mist/95 py-3 backdrop-blur-sm sm:grid-cols-4">
         {STEPS.map((s, index) => {
           const active = s.id === step;
           const done = STEPS.findIndex((x) => x.id === step) > index;

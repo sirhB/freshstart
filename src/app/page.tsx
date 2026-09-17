@@ -25,9 +25,8 @@ export default function HomePage() {
               letters, deliver or mail.
             </h1>
             <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-fog/75">
-              Built for operators who manage clients at scale. Upload a PDF
-              credit report, review flagged items, generate bureau packets, and
-              either hand letters to clients or send them on their behalf.
+              Upload a client PDF, review flagged items, generate bureau packets,
+              then hand letters over — or mail them from your desk.
             </p>
             <div className="animate-rise-delay-3 mt-9 flex flex-wrap gap-3">
               <Link
