@@ -1,4 +1,14 @@
-export type Bureau = "Equifax" | "Experian" | "TransUnion";
+import type { Bureau, ClassifiedDisputeItem } from "@/lib/domain/types";
+import { classifyTradelines } from "@/lib/dispute/classify";
+import { buildCraLetter } from "@/lib/dispute/letters";
+import {
+  SAMPLE_CONSUMER,
+  SAMPLE_REPORT_DATE,
+  SAMPLE_SCORES,
+  SAMPLE_TRADELINES,
+} from "@/lib/dispute/sample-data";
+
+export type { Bureau };
 
 export type NegativeItem = {
   id: string;
@@ -9,7 +19,10 @@ export type NegativeItem = {
   opened: string;
   bureaus: Bureau[];
   disputeGround: string;
+  groundCode: string;
+  confidence: number;
   recommended: boolean;
+  evidenceNotes?: string;
 };
 
 export type DemoClient = {
@@ -23,122 +36,70 @@ export type DemoClient = {
 
 export const DEMO_CLIENT: DemoClient = {
   id: "cli_jordan",
-  name: "Jordan Hale",
-  address: "1842 Meridian Avenue",
-  cityStateZip: "Austin, TX 78702",
-  reportDate: "September 12, 2026",
-  scores: [
-    { bureau: "Equifax", score: 612 },
-    { bureau: "Experian", score: 598 },
-    { bureau: "TransUnion", score: 605 },
-  ],
+  name: SAMPLE_CONSUMER.fullName,
+  address: SAMPLE_CONSUMER.addressLine1,
+  cityStateZip: SAMPLE_CONSUMER.cityStateZip,
+  reportDate: SAMPLE_REPORT_DATE,
+  scores: SAMPLE_SCORES,
 };
 
-export const NEGATIVE_ITEMS: NegativeItem[] = [
-  {
-    id: "item_01",
-    creditor: "Capital One",
-    accountType: "Revolving credit card",
-    status: "Charge-off · 120 days late",
-    balance: "$2,841",
-    opened: "03/2019",
-    bureaus: ["Equifax", "Experian", "TransUnion"],
-    disputeGround: "Incomplete account verification / Metro 2 inconsistency",
-    recommended: true,
-  },
-  {
-    id: "item_02",
-    creditor: "Synchrony Bank",
-    accountType: "Retail revolving",
-    status: "Collection · Midland Credit",
-    balance: "$1,204",
-    opened: "11/2020",
-    bureaus: ["Experian", "TransUnion"],
-    disputeGround: "Not mine / lack of signed agreement documentation",
-    recommended: true,
-  },
-  {
-    id: "item_03",
-    creditor: "OneMain Financial",
-    accountType: "Installment loan",
-    status: "Late 30 / Late 60",
-    balance: "$4,670",
-    opened: "07/2021",
-    bureaus: ["Equifax", "TransUnion"],
-    disputeGround: "Inaccurate late history vs. payment records",
-    recommended: true,
-  },
-  {
-    id: "item_04",
-    creditor: "Medical Collection — Ascension",
-    accountType: "Medical",
-    status: "Open collection",
-    balance: "$486",
-    opened: "02/2023",
-    bureaus: ["Equifax", "Experian"],
-    disputeGround: "Unverified medical debt / billing dispute pending",
-    recommended: false,
-  },
-  {
-    id: "item_05",
-    creditor: "Hard Inquiry — Affirm",
-    accountType: "Inquiry",
-    status: "Hard pull",
-    balance: "—",
-    opened: "08/2025",
-    bureaus: ["Experian"],
-    disputeGround: "Unauthorized inquiry / no permissible purpose shown",
-    recommended: true,
-  },
-];
+const classified = classifyTradelines(SAMPLE_TRADELINES, {
+  asOf: new Date("2026-09-17"),
+  maxRecommended: 5,
+});
+
+export const NEGATIVE_ITEMS: NegativeItem[] = classified.map((item) => ({
+  id: item.id,
+  creditor: item.creditor,
+  accountType: item.accountType,
+  status: item.statusReported,
+  balance: item.balance ?? "—",
+  opened: item.dateOpened ?? "—",
+  bureaus: item.bureaus,
+  disputeGround: item.groundRationale,
+  groundCode: item.groundCode,
+  confidence: item.confidence,
+  recommended: item.recommended,
+  evidenceNotes: item.evidenceNotes,
+}));
+
+function toClassified(items: NegativeItem[]): ClassifiedDisputeItem[] {
+  return items.map((item) => {
+    const source = classified.find((c) => c.id === item.id)!;
+    return source;
+  });
+}
 
 export function buildLetter(
   client: DemoClient,
   bureau: Bureau,
   items: NegativeItem[],
 ): string {
-  const today = "September 17, 2026";
-  const itemLines = items
-    .filter((item) => item.bureaus.includes(bureau))
-    .map(
-      (item, index) =>
-        `${index + 1}. ${item.creditor} — ${item.accountType}\n   Status reported: ${item.status}\n   Balance: ${item.balance} · Opened: ${item.opened}\n   Basis for dispute: ${item.disputeGround}`,
-    )
-    .join("\n\n");
+  const letter = buildCraLetter({
+    consumer: {
+      fullName: client.name,
+      addressLine1: client.address,
+      cityStateZip: client.cityStateZip,
+      dateOfBirth: SAMPLE_CONSUMER.dateOfBirth,
+      phone: SAMPLE_CONSUMER.phone,
+      reportFileNumber: SAMPLE_CONSUMER.reportFileNumber,
+      ssnLast4: SAMPLE_CONSUMER.ssnLast4,
+    },
+    bureau,
+    items: toClassified(items),
+    asOf: new Date("2026-09-17"),
+  });
 
-  const bureauAddress =
-    bureau === "Equifax"
-      ? "Equifax Information Services LLC\nP.O. Box 740256\nAtlanta, GA 30374"
-      : bureau === "Experian"
-        ? "Experian\nP.O. Box 4500\nAllen, TX 75013"
-        : "TransUnion LLC\nConsumer Dispute Center\nP.O. Box 2000\nChester, PA 19016";
+  const lintNote = letter.lintPassed
+    ? "Compliance lint: PASSED"
+    : `Compliance lint: BLOCKED — ${letter.lintIssues
+        .filter((i) => i.severity === "error")
+        .map((i) => i.message)
+        .join("; ")}`;
 
-  return `${client.name}
-${client.address}
-${client.cityStateZip}
+  return `${letter.body}
 
-${today}
-
-${bureauAddress}
-
-Re: Formal dispute under the Fair Credit Reporting Act (15 U.S.C. § 1681i)
-
-To Whom It May Concern:
-
-I am writing to dispute the following information in my credit file. I formally request that you conduct a reasonable reinvestigation of each item listed below and delete or correct any information that cannot be verified as accurate, complete, and timely.
-
-Disputed items:
-
-${itemLines || "No selected items report on this bureau for this demo packet."}
-
-Please investigate these matters and provide written results of your reinvestigation, including a free updated copy of my consumer report if any changes are made.
-
-Thank you for your prompt attention.
-
-Sincerely,
-
-${client.name}
-
-— Generated by Fresh Start Demo · Not legal advice · Sample correspondence only —
+— Fresh Start · CFPB-structured sample · Not legal advice —
+${lintNote}
 `;
 }

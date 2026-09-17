@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Consumer {
+  id           String   @id @default(cuid())
+  fullName     String
+  addressLine1 String
+  cityStateZip String
+  dateOfBirth  String?
+  phone        String?
+  email        String?
+  ssnLast4     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  reports      CreditReport[]
+  cases        DisputeCase[]
+}
+
+model CreditReport {
+  id           String   @id @default(cuid())
+  consumerId   String
+  consumer     Consumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  bureau       String?
+  reportDate   String
+  sourceLabel  String?
+  createdAt    DateTime @default(now())
+  tradelines   Tradeline[]
+}
+
+model Tradeline {
+  id              String   @id @default(cuid())
+  reportId        String
+  report          CreditReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  creditor        String
+  accountNumber   String?
+  accountType     String
+  status          String
+  balance         String?
+  dateOpened      String?
+  dateOfFirstDelinquency String?
+  furnisherName   String?
+  furnisherAddress String?
+  bureausJson     String   // JSON array of bureaus
+  rawNotes        String?
+  disputeItems    DisputeItem[]
+}
+
+model DisputeCase {
+  id          String   @id @default(cuid())
+  consumerId  String
+  consumer    Consumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  title       String
+  status      String   @default("draft") // draft | pending_plan_approval | pending_packet_approval | mailing | investigating | closed
+  waveNumber  Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       DisputeItem[]
+  packets     LetterPacket[]
+  approvals   ApprovalGate[]
+  auditLogs   AuditLog[]
+}
+
+model DisputeItem {
+  id               String   @id @default(cuid())
+  caseId           String
+  case             DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tradelineId      String?
+  tradeline        Tradeline? @relation(fields: [tradelineId], references: [id])
+  creditor         String
+  accountNumber    String?
+  accountType      String
+  statusReported   String
+  balance          String?
+  dateOpened       String?
+  furnisherName    String?
+  furnisherAddress String?
+  bureausJson      String
+  groundCode       String
+  groundRationale  String
+  remedy           String   @default("delete") // delete | correct
+  correctedValues  String?  // JSON
+  confidence       Float
+  recommended      Boolean  @default(false)
+  status           String   @default("proposed") // proposed | approved | denied | queued | mailed | investigating | resolved_deleted | resolved_corrected | resolved_verified
+  evidenceNotes    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model LetterPacket {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  recipientType String   // cra | furnisher
+  recipientName String
+  bureau        String?
+  status        String   @default("draft") // draft | pending_approval | approved | denied | queued | mailed
+  bodyText      String
+  lintPassed    Boolean  @default(false)
+  lintIssuesJson String  @default("[]")
+  itemIdsJson   String   // JSON array of dispute item ids
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  approvals     ApprovalGate[]
+}
+
+model ApprovalGate {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  packetId   String?
+  packet     LetterPacket? @relation(fields: [packetId], references: [id])
+  gateType   String   // parse_review | dispute_plan | packet_signoff | mail_exception | outcome_exception | compliance_hold
+  status     String   @default("pending") // pending | approved | denied
+  actor      String?
+  reason     String?
+  payloadJson String?
+  decidedAt  DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  caseId    String?
+  case      DisputeCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  action    String
+  actor     String
+  detailJson String?
+  createdAt DateTime @default(now())
+}

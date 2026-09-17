@@ -38,6 +38,12 @@ export function SiteHeader({ tone = "light" }: { tone?: "light" | "dark" }) {
         >
           See a sample
         </Link>
+        <Link
+          href="/operator"
+          className={dark ? "text-fog/85 hover:text-paper" : "text-muted hover:text-ink"}
+        >
+          Operator
+        </Link>
       </nav>
 
       <div className="flex items-center gap-3">
@@ -70,6 +76,9 @@ export function SiteFooter() {
         <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-fog/70">
           <Link href="/demo" className="hover:text-paper">
             See a sample
+          </Link>
+          <Link href="/operator" className="hover:text-paper">
+            Operator desk
           </Link>
           <Link href="/#how-it-works" className="hover:text-paper">
             How it works
