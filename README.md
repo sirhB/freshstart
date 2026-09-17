@@ -20,3 +20,7 @@ Open [http://localhost:3000](http://localhost:3000). Interactive sample journey:
 ## Notes
 
 This repository currently ships a polished marketing site plus an interactive **mock** demo (report analysis and mailing are simulated). Live PDF parsing and mail integrations are planned for a later build.
+
+## Roadmap
+
+See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md) for the hands-free automation architecture, human approval gates, and CFPB-aligned dispute letter strategy.
