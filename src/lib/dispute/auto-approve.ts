@@ -105,9 +105,18 @@ export function canAutoApprovePacket(input: {
   items: ClassifiedDisputeItem[];
   policy?: AutoApprovePolicy;
   waveNumber?: number;
+  /** Evidence coach mail gate — blocks hands-free when required docs missing. */
+  evidenceBlocked?: boolean;
+  evidenceMessages?: string[];
 }): { ok: boolean; reason: string } {
   if (!input.lintPassed) {
     return { ok: false, reason: "Compliance lint failed" };
+  }
+  if (input.evidenceBlocked) {
+    return {
+      ok: false,
+      reason: input.evidenceMessages?.[0] ?? "Required evidence missing",
+    };
   }
   const decisions = evaluateAutoApprove(input.items, {
     policy: input.policy,

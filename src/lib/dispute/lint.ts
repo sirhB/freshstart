@@ -4,6 +4,8 @@ import type {
   GeneratedLetter,
   LintIssue,
 } from "@/lib/domain/types";
+import type { EvidenceCoachItem } from "@/lib/dispute/evidence-coach";
+import { mailBlockedByEvidence } from "@/lib/dispute/evidence-coach";
 
 const GUARANTEE_RE =
   /\b(guaranteed?\s+delet|we\s+will\s+remove\s+anything|100%\s+removal|guaranteed?\s+score)\b/i;
@@ -14,6 +16,8 @@ export function lintLetter(input: {
   body: string;
   enclosureList: string[];
   maxItems?: number;
+  /** When provided, missing required evidence becomes a lint error (blocks mail). */
+  evidenceCoach?: EvidenceCoachItem[];
 }): LintIssue[] {
   const issues: LintIssue[] = [];
   const maxItems = input.maxItems ?? 5;
@@ -105,6 +109,21 @@ export function lintLetter(input: {
       severity: "warning",
       message: "CFPB guidance recommends enclosing ID, address proof, and marked report pages.",
     });
+  }
+
+  if (input.evidenceCoach && input.evidenceCoach.length > 0) {
+    const itemIds = new Set(input.items.map((i) => i.id));
+    const relevant = input.evidenceCoach.filter((c) => itemIds.has(c.itemId));
+    const gate = mailBlockedByEvidence(relevant);
+    if (gate.blocked) {
+      for (const message of gate.messages) {
+        issues.push({
+          code: "missing_required_evidence",
+          severity: "error",
+          message,
+        });
+      }
+    }
   }
 
   return issues;

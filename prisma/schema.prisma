@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = env("DB_URL")
 }
 
 model Consumer {
@@ -73,6 +73,21 @@ model DisputeCase {
   outcomes               OutcomeEvent[]
   evidence               EvidenceDocument[]
   notifications          Notification[]
+  reinsertionChecks      ReinsertionCheck[]
+}
+
+/// Scheduled 30/60/90-day reinsertion watchdog checks after a deletion win.
+model ReinsertionCheck {
+  id          String    @id @default(cuid())
+  caseId      String
+  case        DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  itemId      String?
+  label       String
+  dueAt       DateTime
+  status      String    @default("scheduled") // scheduled | due | completed | hit | cancelled
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
 }
 
 model OutcomeEvent {

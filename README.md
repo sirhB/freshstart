@@ -26,9 +26,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | Route | Purpose |
 |-------|---------|
 | `/demo` | Consumer sample journey (live letter engine) |
-| `/operator` | Approval desk, mail, hands-free, next wave |
+| `/operator` | Exception desk, impact-ranked plans, mail, hands-free |
+| `/operator/insights` | Outcome win rates by ground / furnisher |
 | `/intake` | **Upload credit report PDF** (paste text is secondary) |
-| `/cases/[id]` | Consumer portal (tracking, evidence, outcomes) |
+| `/cases/[id]` | Consumer portal (evidence coach, responses, tracking) |
 
 ## Scripts
 
@@ -65,6 +66,20 @@ Open [http://localhost:3000](http://localhost:3000).
 - Next-wave scheduler + reinsertion detection
 - In-app / email-stub notifications
 
+**Tier 2 & 3 (current)**
+- Evidence coach + required-evidence mail gating
+- Annotated report excerpt PDFs
+- Response letter inbox (paste / PDF upload)
+- Consumer statement + CFPB pack export
+- Exception-only operator inbox
+- Impact-ranked wave suggestions + conflict radar
+- 30/60/90 reinsertion watchdog
+- Outcome learning dashboard + richer notification center
+
 ## Roadmap / architecture
 
-See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md). Live Lob postage and bureau APIs remain swap-in replacements for the current simulated mail/parse adapters.
+- Architecture: [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md)
+- **Tier 2 & 3 (done on this branch):** [docs/TIER_2_3_EXECUTION.md](docs/TIER_2_3_EXECUTION.md)
+- **Deferred pre-launch (Tier 1 & 4):** [docs/PRE_LAUNCH_TODO.md](docs/PRE_LAUNCH_TODO.md)
+
+Live Lob postage, auth, CROA consent, and bureau data APIs are tracked in Pre-Launch — not in the current execution pass.

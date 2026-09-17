@@ -2,7 +2,9 @@ import { prisma } from "@/lib/db";
 import type { Bureau, ClassifiedDisputeItem, ConsumerIdentity } from "@/lib/domain/types";
 import { classifyTradelines } from "@/lib/dispute/classify";
 import { matchEvidenceToItems } from "@/lib/dispute/evidence";
+import { buildEvidenceCoach } from "@/lib/dispute/evidence-coach";
 import { resolveFurnisherAddress } from "@/lib/dispute/furnishers";
+import { addDays } from "@/lib/dispute/investigation";
 import { buildDisputePacket } from "@/lib/dispute/letters";
 import {
   classifyResponseText,
@@ -11,41 +13,21 @@ import {
 } from "@/lib/dispute/outcomes";
 import type { TradelineInput } from "@/lib/domain/types";
 import { getCaseBundle } from "@/lib/cases";
+import {
+  createNotification,
+  listNotifications,
+  markNotificationRead,
+} from "@/lib/notifications";
+
+export { createNotification, listNotifications, markNotificationRead };
+
+const REINSERTION_OFFSET_DAYS = [30, 60, 90] as const;
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
     return JSON.parse(value) as T;
   } catch {
     return fallback;
-  }
-}
-
-async function notify(input: {
-  consumerId: string;
-  caseId: string;
-  title: string;
-  body: string;
-  channel?: "in_app" | "email_stub";
-}) {
-  await prisma.notification.create({
-    data: {
-      consumerId: input.consumerId,
-      caseId: input.caseId,
-      title: input.title,
-      body: input.body,
-      channel: input.channel ?? "in_app",
-    },
-  });
-  if (input.channel === "email_stub" || !input.channel) {
-    // Stub: also write audit for email send
-    await prisma.auditLog.create({
-      data: {
-        caseId: input.caseId,
-        action: "notification_email_stub",
-        actor: "system",
-        detailJson: JSON.stringify({ title: input.title, body: input.body }),
-      },
-    });
   }
 }
 
@@ -190,7 +172,7 @@ export async function createCaseFromTradelines(input: {
     });
   }
 
-  await notify({
+  await createNotification({
     consumerId: consumer.id,
     caseId: disputeCase.id,
     title: "Dispute plan ready for review",
@@ -237,7 +219,7 @@ export async function attachEvidence(input: {
     where: { id: input.caseId },
     include: { items: true },
   });
-  if (!disputeCase) return { doc, matches: [] };
+  if (!disputeCase) return { doc, matches: [], coach: [] };
 
   const items: ClassifiedDisputeItem[] = disputeCase.items.map((item) => ({
     id: item.id,
@@ -281,6 +263,16 @@ export async function attachEvidence(input: {
     }
   }
 
+  const coach = buildEvidenceCoach(
+    items,
+    allEvidence.map((e) => ({
+      id: e.id,
+      label: e.label,
+      kind: e.kind,
+      matchedAccountHint: e.matchedAccountHint,
+    })),
+  );
+
   await prisma.auditLog.create({
     data: {
       caseId: input.caseId,
@@ -290,7 +282,171 @@ export async function attachEvidence(input: {
     },
   });
 
-  return { doc, matches };
+  return { doc, matches, coach };
+}
+
+export async function scheduleReinsertionChecks(input: {
+  caseId: string;
+  itemIds: string[];
+  from?: Date;
+}) {
+  const from = input.from ?? new Date();
+  const created = [];
+
+  for (const itemId of input.itemIds) {
+    const item = await prisma.disputeItem.findUnique({ where: { id: itemId } });
+    const creditor = item?.creditor ?? "account";
+    for (const days of REINSERTION_OFFSET_DAYS) {
+      const check = await prisma.reinsertionCheck.create({
+        data: {
+          caseId: input.caseId,
+          itemId,
+          label: `${days}-day reinsertion check — ${creditor}`,
+          dueAt: addDays(from, days),
+          status: "scheduled",
+        },
+      });
+      created.push(check);
+    }
+  }
+
+  if (created.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        caseId: input.caseId,
+        action: "reinsertion_checks_scheduled",
+        actor: "system",
+        detailJson: JSON.stringify({
+          itemIds: input.itemIds,
+          checkIds: created.map((c) => c.id),
+          offsets: [...REINSERTION_OFFSET_DAYS],
+        }),
+      },
+    });
+  }
+
+  return created;
+}
+
+export async function listReinsertionChecks(caseId?: string) {
+  return prisma.reinsertionCheck.findMany({
+    where: caseId ? { caseId } : undefined,
+    orderBy: { dueAt: "asc" },
+  });
+}
+
+export async function runDueReinsertionChecks(now = new Date()) {
+  const due = await prisma.reinsertionCheck.findMany({
+    where: {
+      status: "scheduled",
+      dueAt: { lte: now },
+    },
+    include: { case: true },
+  });
+
+  const updated = [];
+  for (const check of due) {
+    const row = await prisma.reinsertionCheck.update({
+      where: { id: check.id },
+      data: { status: "due" },
+    });
+    updated.push(row);
+
+    await createNotification({
+      consumerId: check.case.consumerId,
+      caseId: check.caseId,
+      title: "Reinsertion check due",
+      body: check.label,
+    });
+  }
+
+  if (updated.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        caseId: updated[0].caseId,
+        action: "reinsertion_checks_marked_due",
+        actor: "system",
+        detailJson: JSON.stringify({
+          checkIds: updated.map((c) => c.id),
+          count: updated.length,
+        }),
+      },
+    });
+  }
+
+  return updated;
+}
+
+export async function markReinsertionHit(input: {
+  checkId: string;
+  actor: string;
+  notes?: string;
+}) {
+  const check = await prisma.reinsertionCheck.findUnique({
+    where: { id: input.checkId },
+    include: { case: true },
+  });
+  if (!check) throw new Error("Reinsertion check not found");
+
+  const updated = await prisma.reinsertionCheck.update({
+    where: { id: input.checkId },
+    data: {
+      status: "hit",
+      completedAt: new Date(),
+      notes: input.notes,
+    },
+  });
+
+  if (check.itemId) {
+    await prisma.outcomeEvent.create({
+      data: {
+        caseId: check.caseId,
+        itemId: check.itemId,
+        outcome: "reinserted",
+        notes: input.notes ?? "Reinsertion watchdog hit",
+      },
+    });
+    await prisma.disputeItem.update({
+      where: { id: check.itemId },
+      data: { status: itemStatusForOutcome("reinserted") },
+    });
+  }
+
+  await prisma.approvalGate.create({
+    data: {
+      caseId: check.caseId,
+      gateType: "outcome_exception",
+      status: "pending",
+      payloadJson: JSON.stringify({
+        reason: "reinsertion_hit",
+        checkId: check.id,
+        itemId: check.itemId,
+        notes: input.notes,
+      }),
+    },
+  });
+
+  await createNotification({
+    consumerId: check.case.consumerId,
+    caseId: check.caseId,
+    title: "Reinsertion detected — review required",
+    body: check.label,
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      caseId: check.caseId,
+      action: "reinsertion_hit",
+      actor: input.actor,
+      detailJson: JSON.stringify({
+        checkId: check.id,
+        itemId: check.itemId,
+        notes: input.notes,
+      }),
+    },
+  });
+
+  return { check: updated, case: await getCaseBundle(check.caseId) };
 }
 
 export async function recordOutcomes(input: {
@@ -319,7 +475,17 @@ export async function recordOutcomes(input: {
     });
   }
 
-  await notify({
+  const wins = input.results.filter((r) =>
+    ["deleted", "corrected"].includes(r.outcome),
+  );
+  if (wins.length > 0) {
+    await scheduleReinsertionChecks({
+      caseId: input.caseId,
+      itemIds: wins.map((w) => w.itemId),
+    });
+  }
+
+  await createNotification({
     consumerId: disputeCase.consumerId,
     caseId: input.caseId,
     title: "Investigation results recorded",
@@ -338,7 +504,7 @@ export async function recordOutcomes(input: {
     },
   });
 
-  // Auto-open outcome exception gate for verified/frivolous
+  // Auto-open outcome exception gate for verified/frivolous/reinserted
   const needsHuman = input.results.filter((r) =>
     ["verified", "frivolous", "reinserted"].includes(r.outcome),
   );
@@ -351,6 +517,12 @@ export async function recordOutcomes(input: {
         payloadJson: JSON.stringify({ items: needsHuman }),
       },
     });
+    await createNotification({
+      consumerId: disputeCase.consumerId,
+      caseId: input.caseId,
+      title: "Outcome exception needs review",
+      body: `${needsHuman.length} item(s) require a human decision (verified / frivolous / reinserted).`,
+    });
   }
 
   return getCaseBundle(input.caseId);
@@ -361,7 +533,29 @@ export async function classifyAndRecordResponse(input: {
   itemId: string;
   actor: string;
   responseText: string;
+  /** When false, skip attaching response_letter evidence. Default true. */
+  attachResponseLetter?: boolean;
+  storageKey?: string;
 }) {
+  const disputeCase = await prisma.disputeCase.findUnique({
+    where: { id: input.caseId },
+  });
+  if (!disputeCase) throw new Error("Case not found");
+
+  if (input.attachResponseLetter !== false) {
+    await attachEvidence({
+      consumerId: disputeCase.consumerId,
+      caseId: input.caseId,
+      itemId: input.itemId,
+      label: "Bureau / furnisher response letter",
+      kind: "response_letter",
+      storageKey:
+        input.storageKey ??
+        `response://${input.caseId}/${input.itemId}/${Date.now()}`,
+      matchedAccountHint: input.itemId,
+    });
+  }
+
   const classified = classifyResponseText(input.responseText);
   return recordOutcomes({
     caseId: input.caseId,
@@ -446,7 +640,7 @@ export async function openNextWave(input: {
       where: { id: input.caseId },
       data: { status: "closed", closedReason: "No actionable items for next wave" },
     });
-    await notify({
+    await createNotification({
       consumerId: prior.consumerId,
       caseId: input.caseId,
       title: "Case closed",
@@ -490,21 +684,6 @@ export async function openNextWave(input: {
   });
 
   return next;
-}
-
-export async function listNotifications(consumerId: string) {
-  return prisma.notification.findMany({
-    where: { consumerId },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-}
-
-export async function markNotificationRead(id: string) {
-  return prisma.notification.update({
-    where: { id },
-    data: { read: true },
-  });
 }
 
 export async function seedFurnisherDirectory() {

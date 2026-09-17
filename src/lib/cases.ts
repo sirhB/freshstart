@@ -4,12 +4,22 @@ import {
   canAutoApprovePacket,
   evaluateAutoApprove,
 } from "@/lib/dispute/auto-approve";
+import { renderAnnotatedExcerptPdf } from "@/lib/dispute/annotate";
+import {
+  buildEvidenceCoach,
+  mailBlockedByEvidence,
+  type EvidenceCoachItem,
+} from "@/lib/dispute/evidence-coach";
 import {
   addDays,
   investigationDueFromDelivery,
   simulateTrackingNumber,
 } from "@/lib/dispute/investigation";
+import { rankDisputeItems, suggestWave } from "@/lib/dispute/impact";
+import { findCrossBureauConflicts } from "@/lib/dispute/furnishers";
+import { applyLintToLetter, lintLetter } from "@/lib/dispute/lint";
 import { buildDisputePacket } from "@/lib/dispute/letters";
+import { createNotification } from "@/lib/notifications";
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
@@ -61,6 +71,112 @@ function toClassified(item: {
   };
 }
 
+async function loadEvidenceCoach(caseId: string, items: ClassifiedDisputeItem[]) {
+  const evidence = await prisma.evidenceDocument.findMany({
+    where: { caseId },
+    orderBy: { createdAt: "desc" },
+  });
+  const coach = buildEvidenceCoach(
+    items,
+    evidence.map((e) => ({
+      id: e.id,
+      label: e.label,
+      kind: e.kind,
+      matchedAccountHint: e.matchedAccountHint,
+    })),
+  );
+  return { evidence, coach, mailGate: mailBlockedByEvidence(coach) };
+}
+
+function conflictRowsFromItems(items: ClassifiedDisputeItem[]) {
+  const rows: {
+    creditor: string;
+    accountNumber?: string;
+    status: string;
+    balance?: string;
+    dateOpened?: string;
+    bureau: Bureau;
+  }[] = [];
+  for (const item of items) {
+    for (const bureau of item.bureaus) {
+      rows.push({
+        creditor: item.creditor,
+        accountNumber: item.accountNumber,
+        status: item.statusReported,
+        balance: item.balance,
+        dateOpened: item.dateOpened,
+        bureau,
+      });
+    }
+  }
+  return rows;
+}
+
+/** Ensure an annotated report-excerpt evidence doc exists for approved items. */
+export async function ensureAnnotatedExcerptEvidence(input: {
+  caseId: string;
+  consumerId: string;
+  consumer: ConsumerIdentity;
+  items: ClassifiedDisputeItem[];
+}) {
+  if (input.items.length === 0) return null;
+
+  const existing = await prisma.evidenceDocument.findFirst({
+    where: { caseId: input.caseId, kind: "report_excerpt" },
+  });
+  if (existing) return existing;
+
+  const pdf = await renderAnnotatedExcerptPdf({
+    consumer: input.consumer,
+    items: input.items,
+  });
+  const storageKey = `annotated://${input.caseId}/${Date.now()}.pdf`;
+
+  // Store stub key; PDF is regenerated on download. Keep buffer size out of SQLite.
+  void pdf;
+
+  return prisma.evidenceDocument.create({
+    data: {
+      consumerId: input.consumerId,
+      caseId: input.caseId,
+      label: "Annotated credit report excerpt",
+      kind: "report_excerpt",
+      storageKey,
+    },
+  });
+}
+
+function relintPacketBody(input: {
+  consumer: ConsumerIdentity;
+  items: ClassifiedDisputeItem[];
+  body: string;
+  coach: EvidenceCoachItem[];
+}) {
+  const enclosureMatch = input.body.match(/Enclosures?:\n([\s\S]*?)(?:\n\n|$)/i);
+  const enclosureList = enclosureMatch
+    ? enclosureMatch[1]
+        .split("\n")
+        .map((l) => l.replace(/^[-•\d.)\s]+/, "").trim())
+        .filter(Boolean)
+    : ["Annotated credit report excerpt"];
+
+  const lintIssues = lintLetter({
+    consumer: input.consumer,
+    items: input.items,
+    body: input.body,
+    enclosureList,
+    evidenceCoach: input.coach,
+  });
+  return applyLintToLetter({
+    recipient: { type: "cra", bureau: "Equifax" },
+    subject: "",
+    body: input.body,
+    enclosureList,
+    itemIds: input.items.map((i) => i.id),
+    lintIssues,
+    lintPassed: false,
+  });
+}
 
 export async function getCaseBundle(caseId: string) {
   const disputeCase = await prisma.disputeCase.findUnique({
@@ -70,18 +186,53 @@ export async function getCaseBundle(caseId: string) {
       items: { orderBy: { confidence: "desc" } },
       packets: { orderBy: { createdAt: "asc" } },
       approvals: { orderBy: { createdAt: "asc" } },
-      auditLogs: { orderBy: { createdAt: "desc" }, take: 30 },
+      auditLogs: { orderBy: { createdAt: "desc" }, take: 40 },
+      evidence: { orderBy: { createdAt: "desc" } },
+      outcomes: { orderBy: { createdAt: "desc" }, take: 40 },
+      reinsertionChecks: { orderBy: { dueAt: "asc" } },
+      notifications: { orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
   if (!disputeCase) return null;
 
+  const items = disputeCase.items.map((item) => ({
+    ...item,
+    bureaus: parseJson<Bureau[]>(item.bureausJson, []),
+    riskFlags: parseJson<string[]>(item.riskFlagsJson, []),
+  }));
+
+  const classified = items.map((i) =>
+    toClassified({
+      ...i,
+      tradelineId: i.tradelineId ?? null,
+      accountNumber: i.accountNumber ?? null,
+      balance: i.balance ?? null,
+      dateOpened: i.dateOpened ?? null,
+      furnisherName: i.furnisherName ?? null,
+      furnisherAddress: i.furnisherAddress ?? null,
+      bureausJson: JSON.stringify(i.bureaus),
+      evidenceNotes: i.evidenceNotes ?? null,
+      riskFlagsJson: JSON.stringify(i.riskFlags ?? []),
+    }),
+  );
+
+  const coach = buildEvidenceCoach(
+    classified,
+    disputeCase.evidence.map((e) => ({
+      id: e.id,
+      label: e.label,
+      kind: e.kind,
+      matchedAccountHint: e.matchedAccountHint,
+    })),
+  );
+  const mailGate = mailBlockedByEvidence(coach);
+  const ranked = rankDisputeItems(classified, coach);
+  const suggestedWave = suggestWave(ranked, 5);
+  const conflicts = findCrossBureauConflicts(conflictRowsFromItems(classified));
+
   return {
     ...disputeCase,
-    items: disputeCase.items.map((item) => ({
-      ...item,
-      bureaus: parseJson<Bureau[]>(item.bureausJson, []),
-      riskFlags: parseJson<string[]>(item.riskFlagsJson, []),
-    })),
+    items,
     packets: disputeCase.packets.map((p) => ({
       ...p,
       lintIssues: parseJson(p.lintIssuesJson, []),
@@ -91,6 +242,19 @@ export async function getCaseBundle(caseId: string) {
       ...a,
       payload: parseJson(a.payloadJson ?? "{}", {}),
     })),
+    evidenceCoach: coach,
+    mailBlocked: mailGate.blocked,
+    mailBlockedMessages: mailGate.messages,
+    impactRanking: ranked.map((r) => ({
+      itemId: r.item.id,
+      impact: r.impact,
+      winnability: r.winnability,
+      evidenceStrength: r.evidenceStrength,
+      score: r.score,
+      rationale: r.rationale,
+    })),
+    suggestedWaveIds: suggestedWave.map((r) => r.item.id),
+    conflicts,
   };
 }
 
@@ -102,7 +266,7 @@ export async function listCases() {
       _count: { select: { items: true, packets: true, approvals: true } },
       approvals: {
         where: { status: "pending" },
-        select: { id: true, gateType: true },
+        select: { id: true, gateType: true, createdAt: true, status: true },
       },
     },
   });
@@ -145,9 +309,6 @@ export async function decidePlan(input: {
     })
   ).map(toClassified);
 
-  // Rebuild packets from approved items only
-  await prisma.letterPacket.deleteMany({ where: { caseId: input.caseId } });
-
   const consumer: ConsumerIdentity = {
     fullName: disputeCase.consumer.fullName,
     addressLine1: disputeCase.consumer.addressLine1,
@@ -157,10 +318,35 @@ export async function decidePlan(input: {
     ssnLast4: disputeCase.consumer.ssnLast4 ?? undefined,
   };
 
+  await ensureAnnotatedExcerptEvidence({
+    caseId: input.caseId,
+    consumerId: disputeCase.consumerId,
+    consumer,
+    items: approvedItems,
+  });
+
+  const { coach } = await loadEvidenceCoach(input.caseId, approvedItems);
+
+  // Rebuild packets from approved items only
+  await prisma.letterPacket.deleteMany({ where: { caseId: input.caseId } });
+
   const letters = buildDisputePacket({
     consumer,
     items: approvedItems,
     includeFurnisherLetters: true,
+  }).map((letter) => {
+    const packetItems = approvedItems.filter((i) => letter.itemIds.includes(i.id));
+    const relinted = relintPacketBody({
+      consumer,
+      items: packetItems,
+      body: letter.body,
+      coach,
+    });
+    return {
+      ...letter,
+      lintIssues: relinted.lintIssues,
+      lintPassed: relinted.lintPassed,
+    };
   });
 
   for (const letter of letters) {
@@ -206,6 +392,15 @@ export async function decidePlan(input: {
     },
   });
 
+  if (mailBlockedByEvidence(coach).blocked) {
+    await createNotification({
+      consumerId: disputeCase.consumerId,
+      caseId: input.caseId,
+      title: "Evidence needed before mailing",
+      body: mailBlockedByEvidence(coach).messages.join(" "),
+    });
+  }
+
   return getCaseBundle(input.caseId);
 }
 
@@ -217,11 +412,50 @@ export async function decidePacket(input: {
 }) {
   const packet = await prisma.letterPacket.findUnique({
     where: { id: input.packetId },
+    include: {
+      case: { include: { consumer: true, items: true } },
+    },
   });
   if (!packet) throw new Error("Packet not found");
 
   if (input.decision === "approved" && !packet.lintPassed) {
     throw new Error("Cannot approve a packet that failed the compliance linter");
+  }
+
+  if (input.decision === "approved") {
+    const itemIds = parseJson<string[]>(packet.itemIdsJson, []);
+    const items = packet.case.items
+      .filter((i) => itemIds.includes(i.id))
+      .map(toClassified);
+    const { coach, mailGate } = await loadEvidenceCoach(packet.caseId, items);
+    if (mailGate.blocked) {
+      throw new Error(
+        `Required evidence missing: ${mailGate.messages.join("; ")}`,
+      );
+    }
+    // Refresh lint with coach (should pass if evidence complete)
+    const consumer: ConsumerIdentity = {
+      fullName: packet.case.consumer.fullName,
+      addressLine1: packet.case.consumer.addressLine1,
+      cityStateZip: packet.case.consumer.cityStateZip,
+    };
+    const relinted = relintPacketBody({
+      consumer,
+      items,
+      body: packet.bodyText,
+      coach,
+    });
+    if (!relinted.lintPassed) {
+      await prisma.letterPacket.update({
+        where: { id: packet.id },
+        data: {
+          lintPassed: false,
+          lintIssuesJson: JSON.stringify(relinted.lintIssues),
+          status: "draft",
+        },
+      });
+      throw new Error("Cannot approve a packet that failed the compliance linter");
+    }
   }
 
   await prisma.letterPacket.update({
@@ -293,12 +527,37 @@ export async function queueMail(input: {
   /** Simulate delivery N days after mail (default 3) for investigation clock. */
   simulateDeliveryDays?: number;
 }) {
+  const disputeCase = await prisma.disputeCase.findUnique({
+    where: { id: input.caseId },
+    include: { items: true, consumer: true },
+  });
+  if (!disputeCase) throw new Error("Case not found");
+
   const approved = await prisma.letterPacket.findMany({
     where: { caseId: input.caseId, status: "approved" },
   });
 
   if (approved.length === 0) {
     throw new Error("No approved packets to mail");
+  }
+
+  const queuedItems = disputeCase.items
+    .filter((i) => i.status === "queued" || i.status === "approved" || i.status === "mailed")
+    .map(toClassified);
+  const { mailGate } = await loadEvidenceCoach(
+    input.caseId,
+    queuedItems.length > 0
+      ? queuedItems
+      : disputeCase.items.filter((i) => i.status !== "denied").map(toClassified),
+  );
+  if (mailGate.blocked) {
+    await createNotification({
+      consumerId: disputeCase.consumerId,
+      caseId: input.caseId,
+      title: "Mail blocked — evidence required",
+      body: mailGate.messages.join(" "),
+    });
+    throw new Error(`Mail blocked: ${mailGate.messages.join("; ")}`);
   }
 
   const now = new Date();
@@ -314,7 +573,6 @@ export async function queueMail(input: {
         status: "mailed",
         trackingNumber,
         mailedAt: now,
-        // Phase 2 stub: mark delivery + RRR as pending until simulateDeliver runs
       },
     });
   }
@@ -329,9 +587,15 @@ export async function queueMail(input: {
     data: {
       status: "investigating",
       investigationStartedAt: now,
-      // Clock starts on delivery; set provisional due from expected delivery
       investigationDueAt: dueAt,
     },
+  });
+
+  await createNotification({
+    consumerId: disputeCase.consumerId,
+    caseId: input.caseId,
+    title: "Letters queued for certified mail",
+    body: `${approved.length} packet(s) mailed (simulated). Investigation due ${dueAt.toLocaleDateString()}.`,
   });
 
   await prisma.auditLog.create({
@@ -356,6 +620,11 @@ export async function simulateDeliver(input: {
   caseId: string;
   actor: string;
 }) {
+  const disputeCase = await prisma.disputeCase.findUnique({
+    where: { id: input.caseId },
+  });
+  if (!disputeCase) throw new Error("Case not found");
+
   const mailed = await prisma.letterPacket.findMany({
     where: { caseId: input.caseId, status: "mailed" },
   });
@@ -389,6 +658,13 @@ export async function simulateDeliver(input: {
       investigationStartedAt: now,
       investigationDueAt: dueAt,
     },
+  });
+
+  await createNotification({
+    consumerId: disputeCase.consumerId,
+    caseId: input.caseId,
+    title: "Mail delivered — investigation clock started",
+    body: `FCRA investigation window ends ${dueAt.toLocaleDateString()}.`,
   });
 
   await prisma.auditLog.create({
@@ -452,7 +728,7 @@ export async function applyAutoApprovePlan(input: {
     },
   });
 
-  // Auto-approve packets that clear policy
+  // Auto-approve packets that clear policy + evidence
   if (result) {
     for (const packet of result.packets) {
       if (packet.status !== "pending_approval" || !packet.lintPassed) continue;
@@ -473,10 +749,16 @@ export async function applyAutoApprovePlan(input: {
           riskFlagsJson: JSON.stringify(i.riskFlags ?? []),
         }),
       );
+      const packetCoach = (result.evidenceCoach ?? []).filter((c) =>
+        packet.itemIds.includes(c.itemId),
+      );
+      const mailGate = mailBlockedByEvidence(packetCoach);
       const gate = canAutoApprovePacket({
         lintPassed: packet.lintPassed,
         items: classifiedPacket,
         waveNumber: input.overrideFirstWave ? 2 : disputeCase.waveNumber,
+        evidenceBlocked: mailGate.blocked,
+        evidenceMessages: mailGate.messages,
       });
       if (gate.ok) {
         await decidePacket({
@@ -493,6 +775,15 @@ export async function applyAutoApprovePlan(input: {
 }
 
 export async function getPacket(packetId: string) {
-  return prisma.letterPacket.findUnique({ where: { id: packetId } });
+  return prisma.letterPacket.findUnique({
+    where: { id: packetId },
+    include: {
+      case: {
+        include: {
+          consumer: true,
+          items: true,
+        },
+      },
+    },
+  });
 }
-
