@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAutoApprove } from "@/lib/dispute/auto-approve";
+import { evaluateAutoApprove, canAutoApprovePacket } from "@/lib/dispute/auto-approve";
 import { matchEvidenceToItems } from "@/lib/dispute/evidence";
+import {
+  buildEvidenceCoach,
+  mailBlockedByEvidence,
+  requiredEvidenceForGround,
+} from "@/lib/dispute/evidence-coach";
 import { findCrossBureauConflicts } from "@/lib/dispute/furnishers";
 import {
   daysRemaining,
@@ -10,6 +15,15 @@ import {
 import { classifyResponseText } from "@/lib/dispute/outcomes";
 import { parseCreditReportText } from "@/lib/dispute/parse-report";
 import { renderLetterPdf } from "@/lib/dispute/pdf";
+import { renderAnnotatedExcerptPdf } from "@/lib/dispute/annotate";
+import { rankDisputeItems, suggestWave } from "@/lib/dispute/impact";
+import { buildExceptionInbox } from "@/lib/dispute/exceptions";
+import { aggregateOutcomeInsights } from "@/lib/dispute/insights";
+import {
+  buildConsumerStatement,
+  buildCfpbComplaintPack,
+} from "@/lib/dispute/statements";
+import { lintLetter } from "@/lib/dispute/lint";
 import { detectReinsertions } from "@/lib/workflow";
 import { classifyTradelines } from "@/lib/dispute/classify";
 import { SAMPLE_TRADELINES } from "@/lib/dispute/sample-data";
@@ -36,6 +50,172 @@ describe("auto-approve policy", () => {
       }));
     const decisions = evaluateAutoApprove(items, { waveNumber: 2 });
     expect(decisions[0]?.autoApprove).toBe(true);
+  });
+
+  it("blocks packet auto-approve when evidence missing", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    }).filter((i) => i.groundCode === "OUTDATED");
+    const gate = canAutoApprovePacket({
+      lintPassed: true,
+      items: items.map((i) => ({
+        ...i,
+        confidence: 0.95,
+        riskFlags: [],
+        recommended: true,
+      })),
+      waveNumber: 2,
+      evidenceBlocked: true,
+      evidenceMessages: ["Missing report excerpt"],
+    });
+    expect(gate.ok).toBe(false);
+  });
+});
+
+describe("evidence coach", () => {
+  it("lists required evidence per ground", () => {
+    const reqs = requiredEvidenceForGround("NOT_MINE");
+    expect(reqs.some((r) => r.kind === "id" && r.required)).toBe(true);
+  });
+
+  it("blocks mail when required evidence missing", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    }).filter((i) => i.recommended);
+    const coach = buildEvidenceCoach(items, []);
+    const gate = mailBlockedByEvidence(coach);
+    expect(gate.blocked).toBe(true);
+    expect(gate.messages.length).toBeGreaterThan(0);
+  });
+
+  it("clears mail gate when report excerpt + identity docs attached", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    }).filter((i) => i.groundCode === "NOT_MINE");
+    const coach = buildEvidenceCoach(items, [
+      { id: "1", label: "ID", kind: "id" },
+      { id: "2", label: "Address", kind: "address_proof" },
+      { id: "3", label: "Excerpt", kind: "report_excerpt" },
+    ]);
+    expect(mailBlockedByEvidence(coach).blocked).toBe(false);
+  });
+
+  it("emits lint error for missing required evidence", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    }).filter((i) => i.recommended).slice(0, 1);
+    const coach = buildEvidenceCoach(items, []);
+    const issues = lintLetter({
+      consumer: {
+        fullName: "Jordan Hale",
+        addressLine1: "1 Main",
+        cityStateZip: "Austin, TX 78701",
+      },
+      items,
+      body: "Fair Credit Reporting Act 15 U.S.C. §1681 dispute letter.",
+      enclosureList: ["ID"],
+      evidenceCoach: coach,
+    });
+    expect(issues.some((i) => i.code === "missing_required_evidence" && i.severity === "error")).toBe(
+      true,
+    );
+  });
+});
+
+describe("impact ranking + exceptions + insights", () => {
+  it("ranks and suggests a wave", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    });
+    const ranked = rankDisputeItems(items);
+    expect(ranked[0].score).toBeGreaterThanOrEqual(ranked[ranked.length - 1].score);
+    const wave = suggestWave(ranked, 3);
+    expect(wave.length).toBeLessThanOrEqual(3);
+  });
+
+  it("builds exception inbox with SLA overdue first", () => {
+    const inbox = buildExceptionInbox({
+      cases: [
+        {
+          id: "c1",
+          title: "Wave 1",
+          consumerName: "A",
+          investigationDueAt: new Date("2026-01-01"),
+          approvals: [],
+        },
+        {
+          id: "c2",
+          title: "Wave 2",
+          consumerName: "B",
+          approvals: [
+            {
+              id: "g1",
+              gateType: "dispute_plan",
+              status: "pending",
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+      now: new Date("2026-09-17"),
+    });
+    expect(inbox[0].kind).toBe("sla_overdue");
+  });
+
+  it("aggregates outcome win rates", () => {
+    const { byGround } = aggregateOutcomeInsights([
+      { outcome: "deleted", item: { groundCode: "NOT_MINE", creditor: "X" } },
+      { outcome: "verified", item: { groundCode: "NOT_MINE", creditor: "X" } },
+      { outcome: "corrected", item: { groundCode: "OUTDATED", creditor: "Y" } },
+    ]);
+    const notMine = byGround.find((r) => r.groundCode === "NOT_MINE");
+    expect(notMine?.winRate).toBe(0.5);
+  });
+});
+
+describe("statements + annotated pdf", () => {
+  it("builds consumer statement and cfpb pack", () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    });
+    const statement = buildConsumerStatement({
+      consumer: {
+        fullName: "Jordan Hale",
+        addressLine1: "1 Main",
+        cityStateZip: "Austin, TX 78701",
+      },
+      item: items[0],
+      asOf: new Date("2026-09-17"),
+    });
+    expect(statement).toMatch(/Fair Credit Reporting Act/);
+    const pack = buildCfpbComplaintPack({
+      consumer: {
+        fullName: "Jordan Hale",
+        addressLine1: "1 Main",
+        cityStateZip: "Austin, TX 78701",
+      },
+      caseTitle: "Wave 1",
+      caseId: "case1",
+      items: items.slice(0, 2),
+      timeline: [{ at: "2026-09-01", action: "mailed" }],
+      asOf: new Date("2026-09-17"),
+    });
+    expect(pack).toMatch(/CFPB COMPLAINT/);
+  });
+
+  it("renders annotated excerpt PDF", async () => {
+    const items = classifyTradelines(SAMPLE_TRADELINES, {
+      asOf: new Date("2026-09-17"),
+    }).slice(0, 2);
+    const pdf = await renderAnnotatedExcerptPdf({
+      consumer: {
+        fullName: "Jordan Hale",
+        addressLine1: "1 Main",
+        cityStateZip: "Austin, TX 78701",
+      },
+      items,
+    });
+    expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
   });
 });
 

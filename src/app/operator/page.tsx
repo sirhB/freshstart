@@ -14,7 +14,12 @@ export default async function OperatorPage() {
     updatedAt: c.updatedAt.toISOString(),
     consumer: { fullName: c.consumer.fullName },
     _count: c._count,
-    approvals: c.approvals,
+    approvals: c.approvals.map((a) => ({
+      id: a.id,
+      gateType: a.gateType,
+      status: a.status,
+      createdAt: a.createdAt.toISOString(),
+    })),
   }));
 
   const firstId = initialCases[0]?.id;
