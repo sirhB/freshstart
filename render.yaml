@@ -1,0 +1,16 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Set DB_URL in the dashboard for Postgres, or keep the SQLite default for demos.
+services:
+  - type: web
+    name: freshstart
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DB_URL
+        # Ephemeral SQLite on the instance filesystem (fine for demos; use Postgres for real data).
+        value: file:./prisma/prod.db
