@@ -45,4 +45,4 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Roadmap
 
-See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md) for the hands-free automation architecture and later phases (PDF parse, Lob certified mail, auto-approve policies).
+See [docs/AUTOMATION_TECHNICAL_PLAN.md](docs/AUTOMATION_TECHNICAL_PLAN.md) for the hands-free automation architecture, human approval gates, CFPB-aligned dispute letter strategy, and later phases (PDF parse, Lob certified mail, auto-approve policies).
