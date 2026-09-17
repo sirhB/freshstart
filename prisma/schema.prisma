@@ -20,6 +20,8 @@ model Consumer {
   updatedAt    DateTime @updatedAt
   reports      CreditReport[]
   cases        DisputeCase[]
+  evidence     EvidenceDocument[]
+  notifications Notification[]
 }
 
 model CreditReport {
@@ -52,18 +54,76 @@ model Tradeline {
 }
 
 model DisputeCase {
-  id          String   @id @default(cuid())
-  consumerId  String
-  consumer    Consumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
-  title       String
-  status      String   @default("draft") // draft | pending_plan_approval | pending_packet_approval | mailing | investigating | closed
-  waveNumber  Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  items       DisputeItem[]
-  packets     LetterPacket[]
-  approvals   ApprovalGate[]
-  auditLogs   AuditLog[]
+  id                     String    @id @default(cuid())
+  consumerId             String
+  consumer               Consumer  @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  title                  String
+  status                 String    @default("draft") // draft | pending_plan_approval | pending_packet_approval | mailing | investigating | closed
+  waveNumber             Int       @default(1)
+  investigationStartedAt DateTime?
+  investigationDueAt     DateTime? // FCRA ~30 day window from delivery
+  parentCaseId           String?   // prior wave / reinsertion source
+  closedReason           String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  items                  DisputeItem[]
+  packets                LetterPacket[]
+  approvals              ApprovalGate[]
+  auditLogs              AuditLog[]
+  outcomes               OutcomeEvent[]
+  evidence               EvidenceDocument[]
+  notifications          Notification[]
+}
+
+model OutcomeEvent {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      DisputeItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  outcome   String   // deleted | corrected | verified | frivolous | no_response | reinserted
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model EvidenceDocument {
+  id                 String   @id @default(cuid())
+  consumerId         String
+  consumer           Consumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  caseId             String?
+  case               DisputeCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  itemId             String?
+  item               DisputeItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  label              String
+  kind               String   // id | address_proof | statement | report_excerpt | response_letter | other
+  storageKey         String   // local stub path or object key
+  matchedAccountHint String?
+  createdAt          DateTime @default(now())
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  consumerId String?
+  consumer   Consumer? @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  caseId     String?
+  case       DisputeCase? @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  channel    String   @default("in_app") // in_app | email_stub
+  title      String
+  body       String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model FurnisherAddress {
+  id           String   @id @default(cuid())
+  name         String
+  addressLines String   // newline-separated
+  source       String   @default("manual") // manual | report | crowed
+  verifiedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([name])
 }
 
 model DisputeItem {
@@ -89,25 +149,32 @@ model DisputeItem {
   recommended      Boolean  @default(false)
   status           String   @default("proposed") // proposed | approved | denied | queued | mailed | investigating | resolved_deleted | resolved_corrected | resolved_verified
   evidenceNotes    String?
+  riskFlagsJson    String   @default("[]")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  outcomes         OutcomeEvent[]
+  evidence         EvidenceDocument[]
 }
 
 model LetterPacket {
-  id            String   @id @default(cuid())
-  caseId        String
-  case          DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  recipientType String   // cra | furnisher
-  recipientName String
-  bureau        String?
-  status        String   @default("draft") // draft | pending_approval | approved | denied | queued | mailed
-  bodyText      String
-  lintPassed    Boolean  @default(false)
-  lintIssuesJson String  @default("[]")
-  itemIdsJson   String   // JSON array of dispute item ids
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  approvals     ApprovalGate[]
+  id               String    @id @default(cuid())
+  caseId           String
+  case             DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  recipientType    String    // cra | furnisher
+  recipientName    String
+  bureau           String?
+  status           String    @default("draft") // draft | pending_approval | approved | denied | queued | mailed | delivered
+  bodyText         String
+  lintPassed       Boolean   @default(false)
+  lintIssuesJson   String    @default("[]")
+  itemIdsJson      String    // JSON array of dispute item ids
+  trackingNumber   String?
+  mailedAt         DateTime?
+  deliveredAt      DateTime?
+  returnReceiptAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  approvals        ApprovalGate[]
 }
 
 model ApprovalGate {
